@@ -1,0 +1,99 @@
+/* style.css - layout moderno com tema Dourado/Preto */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;font-family:Inter,Arial,sans-serif;background:#f4f6fb;color:#222}
+
+/* NOVAS VARIÁVEIS DE TEMA: DOURADO/PRETO */
+:root{
+  --accent:#D4AF37;       /* Dourado (Cor Principal) */
+  --muted:#757575;        /* Cinza (Texto Secundário) */
+  --bg-card:#fff;
+  --radius:12px;
+  --gap:16px;
+  --bg-sidebar:#000000;
+  --color-sidebar-link:#dbeafe;
+}
+
+.container{display:flex;min-height:100vh;gap:var(--gap);padding:28px;align-items:flex-start}
+.sidebar{
+  width:240px;
+  /* NOVO GRADIENTE: PRETO ESCURO */
+  background:linear-gradient(180deg,#212121 0%,#000000 100%); 
+  color:#fff;
+  padding:20px;
+  border-radius:var(--radius);
+  box-shadow:0 6px 18px rgba(12,18,28,0.12);
+  position:sticky;
+  top:20px;
+  height:fit-content
+}
+.brand{font-weight:700;margin-bottom:14px;display:block;font-size:18px}
+.sidebar a{
+    color:var(--color-sidebar-link);
+    display:block;
+    padding:8px 10px;
+    margin:8px 0;
+    text-decoration:none;
+    border-radius:8px;
+    transition:background .15s ease,transform .06s ease;
+    font-size:14px
+}
+.sidebar a:hover{
+    background:rgba(255,255,255,0.04);
+    transform:translateX(4px)
+}
+.main{flex:1;max-width:calc(100% - 300px)}
+.card{background:var(--bg-card);padding:18px;border-radius:12px;box-shadow:0 6px 20px rgba(26,32,44,0.06);margin-bottom:16px}
+h1{font-size:22px;margin-bottom:12px;color:#0f1724}
+form{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+form.restore-form { display: block; }
+label.field{display:flex;flex-direction:column;font-size:13px;color:#0f1724}
+input,select,textarea{margin-top:6px;padding:10px 12px;border-radius:8px;border:1px solid #e6e9ef;font-size:14px;width:100%;outline:none}
+textarea{min-height:92px;resize:vertical}
+input:focus,select:focus,textarea:focus{box-shadow:0 0 0 4px rgba(212,175,55,0.2);border-color:var(--accent)}
+
+.btn{
+    background:var(--accent);
+    color:#fff;
+    padding:10px 14px;
+    border:none;
+    border-radius:10px;
+    cursor:pointer;
+    font-weight:600;
+    font-size:14px;
+    transition:opacity .15s ease,transform .06s ease;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:6px
+}
+.btn:hover{opacity:.85}
+.btn.ghost{
+    background:transparent;
+    color:var(--accent);
+    border:1px solid var(--accent);
+    padding:9px 13px;
+}
+.btn.ghost:hover{
+    background:var(--accent);
+    color:#fff;
+}
+.row{display:flex;align-items:center;gap:12px}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;margin-top:16px}
+th,td{padding:10px 14px;text-align:left;border-bottom:1px solid #eee;font-size:13px;color:#212121}
+th{background:#f8f8f8;font-weight:600;color:#0f1724;text-transform:uppercase}
+.office-select { 
+    margin-bottom: 12px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+}
+.office-links a {
+    text-decoration: none;
+    color: var(--accent);
+    font-size: 14px;
+    margin-right: 15px;
+}
+.office-links a:hover {
+    text-decoration: underline;
+}

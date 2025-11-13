@@ -1,0 +1,11 @@
+
+services:
+  - type: web
+    name: SistemaRegistroClientes
+    env: java
+    plan: free
+    buildCommand: 'mvn -B -DskipTests package'
+    startCommand: 'java -jar target/SistemaRegistroClientes-0.0.1-SNAPSHOT.jar'
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: 'default'

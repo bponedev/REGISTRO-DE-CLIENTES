@@ -10,6 +10,9 @@ DB_FILE = os.path.join(BASE_DIR, 'database.db')
 app = Flask(__name__, static_folder='static', template_folder='templates')
 app.secret_key = 'replace_with_strong_secret'
 
+# Garantir que o banco existe mesmo no Render
+init_db()
+
 def get_conn():
     conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row

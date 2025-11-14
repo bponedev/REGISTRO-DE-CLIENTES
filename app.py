@@ -1,35 +1,33 @@
-from flask import Flask, request, redirect, url_for, send_file, render_template, render_template_string
+from flask import Flask, request, send_file, render_template, redirect, url_for
 import sqlite3, csv, io, os
 from datetime import datetime
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
-# --- Configuração de Caminhos e App ---
-# O Flask agora procurará por templates na pasta 'templates' e assets na 'static'.
-# O caminho do banco de dados é ajustado para ser robusto em produção.
-DB_FILE = 'database.db'
+# Define o caminho do banco de dados para que funcione em qualquer lugar
+DB_PATH = os.path.join(os.path.dirname(__file__), 'database.db')
 
-# Use um caminho absoluto para o banco de dados
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), DB_FILE)
-
+# Configura o Flask para usar as pastas padrão (templates e static)
 app = Flask(__name__, static_folder='static', template_folder='templates')
-app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0 # Desabilita cache para arquivos estáticos
+
+# REMOVIDO: INDEX_HTML, TABLE_HTML, EXCLUIDOS_HTML
 
 def get_conn():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH) # Usa o DB_PATH corrigido
     conn.row_factory = sqlite3.Row
     return conn
 
-# Funções de Suporte (Inalteradas, mas robustas com DB_PATH)
 def init_db():
     conn = get_conn()
     c = conn.cursor()
+    # Tabela principal de exemplo
     c.execute("""CREATE TABLE IF NOT EXISTS office_Central (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         nome TEXT, cpf TEXT, escritorio TEXT, tipo_acao TEXT,
         data_fechamento TEXT, pendencias TEXT, numero_processo TEXT,
         data_protocolo TEXT, observacoes TEXT, captador TEXT, created_at TEXT
     )""")
+    # Tabela de excluídos
     c.execute("""CREATE TABLE IF NOT EXISTS excluidos (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         nome TEXT, cpf TEXT, escritorio_origem TEXT, tipo_acao TEXT,
@@ -40,72 +38,63 @@ def init_db():
     conn.commit()
     conn.close()
 
-def get_table_names(include_excluidos=True):
-    conn = get_conn()
-    cur = conn.cursor()
-    query = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
-    if not include_excluidos:
-        query += " AND name != 'excluidos'"
-    cur.execute(query)
-    tables = [r['name'] for r in cur.fetchall()]
-    conn.close()
-    return tables
+# Inicializa o banco de dados ao iniciar
+with app.app_context():
+    init_db()
 
-# --- Rotas Principais (Usando render_template) ---
+def get_offices():
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'office_%';")
+    # Retorna apenas o nome da tabela (ex: office_Central)
+    offices = [r['name'] for r in c.fetchall()]
+    conn.close()
+    return offices
+
+# =========================================================================
+# ROTAS PRINCIPAIS
+# =========================================================================
 
 @app.route('/')
-def home():
-    # Passa as tabelas disponíveis para o menu de seleção
-    tables = [t.replace('office_', '') for t in get_table_names(include_excluidos=False)]
-    return render_template('index.html', tables=tables)
+def index():
+    # Retorna o template index.html (NÃO MAIS INDEX_HTML)
+    return render_template('index.html')
 
 @app.route('/table')
 def table():
-    office_name = request.args.get('office', '')
-    
-    if not office_name:
-        # Se não houver escritório especificado, lista todas as tabelas
-        tables = [t.replace('office_', '') for t in get_table_names(include_excluidos=False)]
-        return render_template('table.html', tables=tables, rows=None, office_name=None)
-
-    # Se houver escritório, busca os registros
+    office_name = request.args.get('office', 'Central')
     table_name = f"office_{office_name.replace(' ', '_')}"
+    
     conn = get_conn()
-    cur = conn.cursor()
+    c = conn.cursor()
+    
     rows = []
-    
     try:
-        cur.execute(f"SELECT * FROM {table_name}")
-        rows = [dict(r) for r in cur.fetchall()]
+        c.execute(f"SELECT * FROM {table_name}")
+        rows = c.fetchall()
     except sqlite3.OperationalError:
-        # Tabela não existe
-        pass 
-        
-    conn.close()
-    
-    # Retorna o template, passando os dados
-    return render_template('table.html', rows=rows, office_name=office_name, tables=None)
+        pass # Tabela não existe
 
+    offices_list = [t.replace('office_', '') for t in get_offices()]
+
+    conn.close()
+    # Retorna o template table.html (NÃO MAIS TABLE_HTML)
+    return render_template('table.html', rows=rows, offices=offices_list, office=office_name)
 
 @app.route('/excluidos')
 def excluidos():
     conn = get_conn()
-    cur = conn.cursor()
-    rows = []
-    
-    try:
-        cur.execute(f"SELECT * FROM excluidos ORDER BY data_exclusao DESC")
-        rows = [dict(r) for r in cur.fetchall()]
-    except sqlite3.OperationalError:
-        # Tabela 'excluidos' não existe
-        pass
-        
+    c = conn.cursor()
+    c.execute("SELECT * FROM excluidos ORDER BY data_exclusao DESC")
+    excluidos = c.fetchall()
     conn.close()
-    
-    # Retorna o template, passando os dados
-    return render_template('excluidos.html', rows=rows)
+    # Retorna o template excluidos.html (NÃO MAIS EXCLUIDOS_HTML)
+    return render_template('excluidos.html', excluidos=excluidos)
 
-# --- Rotas de Ação (Submeter, Excluir, Restaurar) ---
+
+# =========================================================================
+# ROTAS DE AÇÃO
+# =========================================================================
 
 @app.route('/submit', methods=['POST'])
 def submit():
@@ -116,7 +105,7 @@ def submit():
     conn = get_conn()
     c = conn.cursor()
     
-    # Cria a tabela se não existir
+    # Garante que a tabela existe antes de inserir
     c.execute(f"""
     CREATE TABLE IF NOT EXISTS {table_name} (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -124,18 +113,14 @@ def submit():
         data_fechamento TEXT, pendencias TEXT, numero_processo TEXT,
         data_protocolo TEXT, observacoes TEXT, captador TEXT, created_at TEXT
     )""")
+
+    cols = ['nome', 'cpf', 'escritorio', 'tipo_acao', 'data_fechamento', 
+            'pendencias', 'numero_processo', 'data_protocolo', 
+            'observacoes', 'captador', 'created_at']
     
-    # Prepara os dados para inserção
-    cols = ['nome', 'cpf', 'escritorio', 'tipo_acao', 'data_fechamento', 'pendencias', 
-            'numero_processo', 'data_protocolo', 'observacoes', 'captador', 'created_at']
-    
-    values = [
-        data.get('nome', ''), data.get('cpf', ''), office, data.get('tipo_acao', ''), 
-        data.get('data_fechamento', ''), data.get('pendencias', ''), data.get('numero_processo', ''), 
-        data.get('data_protocolo', ''), data.get('observacoes', ''), data.get('captador', ''),
-        datetime.now().strftime('%d/%m/%Y %H:%M:%S')
-    ]
-    
+    values = [data.get(col, '') for col in cols[:-1]]
+    values.append(datetime.now().strftime('%d/%m/%Y %H:%M:%S')) # created_at
+
     placeholders = ', '.join(['?'] * len(cols))
     
     c.execute(f"INSERT INTO {table_name} ({', '.join(cols)}) VALUES ({placeholders})", values)
@@ -144,295 +129,326 @@ def submit():
     
     return redirect(url_for('table', office=office))
 
+# Exclui UM registro e move para 'excluidos'
 @app.route('/delete', methods=['POST'])
-def delete_single():
+def delete_record():
     record_id = request.form.get('id')
-    office_name = request.form.get('table').replace('office_', '')
+    office_name = request.form.get('table')
     table_name = f"office_{office_name.replace(' ', '_')}"
-    
-    if not record_id or not table_name:
-        return redirect(url_for('table'))
-    
+
+    if not record_id or not office_name:
+        return "ID ou Tabela não fornecidos", 400
+
     conn = get_conn()
     c = conn.cursor()
     
-    # 1. Busca o registro
-    c.execute(f"SELECT * FROM {table_name} WHERE id = ?", (record_id,))
-    row = c.fetchone()
-    if row:
-        row_dict = dict(row)
-        
-        # 2. Move para a tabela 'excluidos'
-        cols = ['nome', 'cpf', 'escritorio_origem', 'tipo_acao', 'data_fechamento', 'pendencias', 
-                'numero_processo', 'data_protocolo', 'observacoes', 'captador', 'created_at', 'data_exclusao']
-        
-        values = [row_dict.get(c.replace('_origem', ''), '') for c in cols[:-1]] # Mapeia colunas
-        values.append(datetime.now().strftime('%d/%m/%Y %H:%M:%S')) # data_exclusao
-        
-        placeholders = ', '.join(['?'] * len(cols))
-        
-        c.execute(f"INSERT INTO excluidos ({', '.join(cols)}) VALUES ({placeholders})", values)
-        
-        # 3. Exclui da tabela original
-        c.execute(f"DELETE FROM {table_name} WHERE id = ?", (record_id,))
-        conn.commit()
-        
-    conn.close()
-    return redirect(url_for('table', office=office_name))
-
-@app.route('/delete_selected', methods=['POST'])
-def delete_selected():
-    ids_str = request.form.get('ids', '')
-    office_name = request.form.get('table').replace('office_', '')
-    table_name = f"office_{office_name.replace(' ', '_')}"
-
-    if not ids_str:
-        return redirect(url_for('table', office=office_name))
-        
-    ids = [int(i.strip()) for i in ids_str.split(',') if i.strip().isdigit()]
-    
-    if not ids:
-        return redirect(url_for('table', office=office_name))
-        
-    conn = get_conn()
-    c = conn.cursor()
-    
-    date_now = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
-
-    for record_id in ids:
-        # 1. Busca o registro
+    try:
+        # 1. Seleciona o registro a ser movido
         c.execute(f"SELECT * FROM {table_name} WHERE id = ?", (record_id,))
         row = c.fetchone()
-        
+
         if row:
+            # 2. Insere na tabela 'excluidos'
             row_dict = dict(row)
+            cols = [k for k in row_dict.keys() if k != 'id'] + ['escritorio_origem', 'data_exclusao']
             
-            # 2. Move para a tabela 'excluidos'
-            cols = ['nome', 'cpf', 'escritorio_origem', 'tipo_acao', 'data_fechamento', 'pendencias', 
-                    'numero_processo', 'data_protocolo', 'observacoes', 'captador', 'created_at', 'data_exclusao']
-            values = [row_dict.get(c.replace('_origem', ''), '') for c in cols[:-1]]
-            values.append(date_now)
+            # Remove a coluna 'escritorio' e substitui por 'escritorio_origem'
+            del row_dict['escritorio'] 
+            values = [row_dict.get(k, '') for k in ['nome', 'cpf', 'tipo_acao', 'data_fechamento', 'pendencias', 'numero_processo', 'data_protocolo', 'observacoes', 'captador', 'created_at']]
+            
+            # Adiciona escritorio_origem e data_exclusao
+            values.append(office_name) 
+            values.append(datetime.now().strftime('%d/%m/%Y %H:%M:%S'))
+
             placeholders = ', '.join(['?'] * len(cols))
+            
             c.execute(f"INSERT INTO excluidos ({', '.join(cols)}) VALUES ({placeholders})", values)
             
-            # 3. Exclui da tabela original
+            # 3. Deleta da tabela de origem
             c.execute(f"DELETE FROM {table_name} WHERE id = ?", (record_id,))
+            conn.commit()
             
-    conn.commit()
+    except sqlite3.OperationalError as e:
+        conn.close()
+        return f"Erro ao deletar/mover: {e}", 500
+        
     conn.close()
     return redirect(url_for('table', office=office_name))
 
+# Exclui MÚLTIPLOS registros e move para 'excluidos'
+@app.route('/delete_selected', methods=['POST'])
+def delete_selected():
+    # 'ids' virá como lista de strings do script.js
+    ids = request.form.getlist('ids') 
+    office_name = request.form.get('table')
+    table_name = f"office_{office_name.replace(' ', '_')}"
 
+    if not ids or not office_name:
+        return "IDs ou Tabela não fornecidos", 400
+
+    conn = get_conn()
+    c = conn.cursor()
+
+    try:
+        for record_id in ids:
+            # 1. Seleciona o registro
+            c.execute(f"SELECT * FROM {table_name} WHERE id = ?", (record_id,))
+            row = c.fetchone()
+
+            if row:
+                # 2. Insere na tabela 'excluidos'
+                row_dict = dict(row)
+                cols = [k for k in row_dict.keys() if k != 'id'] + ['escritorio_origem', 'data_exclusao']
+                
+                # Prepara os valores
+                del row_dict['escritorio']
+                values = [row_dict.get(k, '') for k in ['nome', 'cpf', 'tipo_acao', 'data_fechamento', 'pendencias', 'numero_processo', 'data_protocolo', 'observacoes', 'captador', 'created_at']]
+                
+                # Adiciona escritorio_origem e data_exclusao
+                values.append(office_name) 
+                values.append(datetime.now().strftime('%d/%m/%Y %H:%M:%S'))
+
+                placeholders = ', '.join(['?'] * len(cols))
+                c.execute(f"INSERT INTO excluidos ({', '.join(cols)}) VALUES ({placeholders})", values)
+                
+                # 3. Deleta da tabela de origem
+                c.execute(f"DELETE FROM {table_name} WHERE id = ?", (record_id,))
+        
+        conn.commit()
+            
+    except sqlite3.OperationalError as e:
+        conn.close()
+        return f"Erro ao deletar/mover em lote: {e}", 500
+        
+    conn.close()
+    return redirect(url_for('table', office=office_name))
+
+# Restaura UM registro da tabela 'excluidos'
 @app.route('/restore', methods=['POST'])
-def restore_single():
+def restore_record():
     record_id = request.form.get('id')
     
     if not record_id:
-        return redirect(url_for('excluidos'))
-        
-    conn = get_conn()
-    c = conn.cursor()
-    
-    # 1. Busca o registro na tabela 'excluidos'
-    c.execute(f"SELECT * FROM excluidos WHERE id = ?", (record_id,))
-    row = c.fetchone()
-    
-    if row:
-        row_dict = dict(row)
-        original_office = row_dict['escritorio_origem']
-        table_name = f"office_{original_office.replace(' ', '_')}"
-        
-        # 2. Insere na tabela de origem (sem data_exclusao)
-        cols_orig = ['nome', 'cpf', 'escritorio', 'tipo_acao', 'data_fechamento', 'pendencias', 
-                     'numero_processo', 'data_protocolo', 'observacoes', 'captador', 'created_at']
-        
-        values_orig = [
-            row_dict['nome'], row_dict['cpf'], original_office, row_dict['tipo_acao'], 
-            row_dict['data_fechamento'], row_dict['pendencias'], row_dict['numero_processo'], 
-            row_dict['data_protocolo'], row_dict['observacoes'], row_dict['captador'], 
-            row_dict['created_at']
-        ]
-        
-        placeholders = ', '.join(['?'] * len(cols_orig))
-        
-        # Cria a tabela de origem se não existir
-        c.execute(f"""
-        CREATE TABLE IF NOT EXISTS {table_name} (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome TEXT, cpf TEXT, escritorio TEXT, tipo_acao TEXT,
-            data_fechamento TEXT, pendencias TEXT, numero_processo TEXT,
-            data_protocolo TEXT, observacoes TEXT, captador TEXT, created_at TEXT
-        )""")
-        
-        c.execute(f"INSERT INTO {table_name} ({', '.join(cols_orig)}) VALUES ({placeholders})", values_orig)
-        
-        # 3. Exclui da tabela 'excluidos'
-        c.execute(f"DELETE FROM excluidos WHERE id = ?", (record_id,))
-        conn.commit()
-        
-    conn.close()
-    return redirect(url_for('excluidos'))
+        return "ID não fornecido", 400
 
-@app.route('/restore_selected', methods=['POST'])
-def restore_selected():
-    ids_str = request.form.get('ids', '')
-    
-    if not ids_str:
-        return redirect(url_for('excluidos'))
-        
-    ids = [int(i.strip()) for i in ids_str.split(',') if i.strip().isdigit()]
-    
-    if not ids:
-        return redirect(url_for('excluidos'))
-        
     conn = get_conn()
     c = conn.cursor()
     
-    for record_id in ids:
-        # 1. Busca o registro na tabela 'excluidos'
-        c.execute(f"SELECT * FROM excluidos WHERE id = ?", (record_id,))
+    try:
+        # 1. Seleciona o registro da lixeira
+        c.execute("SELECT * FROM excluidos WHERE id = ?", (record_id,))
         row = c.fetchone()
-        
+
         if row:
             row_dict = dict(row)
-            original_office = row_dict['escritorio_origem']
-            table_name = f"office_{original_office.replace(' ', '_')}"
+            office_name = row_dict['escritorio_origem']
+            table_name = f"office_{office_name.replace(' ', '_')}"
             
-            # 2. Insere na tabela de origem (sem data_exclusao)
-            cols_orig = ['nome', 'cpf', 'escritorio', 'tipo_acao', 'data_fechamento', 'pendencias', 
-                         'numero_processo', 'data_protocolo', 'observacoes', 'captador', 'created_at']
+            # Garante que a tabela de destino existe antes de inserir
+            init_db() 
+
+            # 2. Insere na tabela de origem (usando a coluna 'escritorio' que é necessária)
+            cols = ['nome', 'cpf', 'escritorio', 'tipo_acao', 'data_fechamento', 
+                    'pendencias', 'numero_processo', 'data_protocolo', 
+                    'observacoes', 'captador', 'created_at']
             
-            values_orig = [
-                row_dict['nome'], row_dict['cpf'], original_office, row_dict['tipo_acao'], 
-                row_dict['data_fechamento'], row_dict['pendencias'], row_dict['numero_processo'], 
-                row_dict['data_protocolo'], row_dict['observacoes'], row_dict['captador'], 
-                row_dict['created_at']
-            ]
-            placeholders = ', '.join(['?'] * len(cols_orig))
+            # Prepara os valores para a tabela de destino
+            values = [row_dict.get(k, '') for k in ['nome', 'cpf']]
+            values.append(office_name) # escritorio
+            values.extend([row_dict.get(k, '') for k in ['tipo_acao', 'data_fechamento', 'pendencias', 'numero_processo', 'data_protocolo', 'observacoes', 'captador', 'created_at']])
+
+            placeholders = ', '.join(['?'] * len(cols))
             
-            # Cria a tabela de origem se não existir
-            c.execute(f"""
-            CREATE TABLE IF NOT EXISTS {table_name} (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                nome TEXT, cpf TEXT, escritorio TEXT, tipo_acao TEXT,
-                data_fechamento TEXT, pendencias TEXT, numero_processo TEXT,
-                data_protocolo TEXT, observacoes TEXT, captador TEXT, created_at TEXT
-            )""")
+            c.execute(f"INSERT INTO {table_name} ({', '.join(cols)}) VALUES ({placeholders})", values)
             
-            c.execute(f"INSERT INTO {table_name} ({', '.join(cols_orig)}) VALUES ({placeholders})", values_orig)
+            # 3. Deleta da tabela 'excluidos'
+            c.execute("DELETE FROM excluidos WHERE id = ?", (record_id,))
+            conn.commit()
             
-            # 3. Exclui da tabela 'excluidos'
-            c.execute(f"DELETE FROM excluidos WHERE id = ?", (record_id,))
-            
-    conn.commit()
+    except sqlite3.OperationalError as e:
+        conn.close()
+        return f"Erro ao restaurar/mover: {e}", 500
+        
     conn.close()
     return redirect(url_for('excluidos'))
 
-# --- Rotas de Exportação (CSV e PDF) ---
-# Lógica do PDF simplificada para usar reportlab
+# Restaura MÚLTIPLOS registros da tabela 'excluidos'
+@app.route('/restore_selected', methods=['POST'])
+def restore_selected():
+    ids = request.form.getlist('ids')
+    
+    if not ids:
+        return "IDs não fornecidos", 400
 
-def generate_pdf_from_rows(c, tables, buffer):
-    """Gera o PDF com os dados das tabelas."""
-    p = canvas.Canvas(buffer, pagesize=A4)
-    width, height = A4; y = height - 80
-    
-    # Cabeçalho Fixo
-    logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logo', 'logo.png') # Ajustado para path absoluto
-    if os.path.exists(logo_path):
-        try: p.drawImage(logo_path, 40, y-20, width=60, preserveAspectRatio=True)
-        except Exception: pass
+    conn = get_conn()
+    c = conn.cursor()
+
+    try:
+        for record_id in ids:
+            # 1. Seleciona o registro da lixeira
+            c.execute("SELECT * FROM excluidos WHERE id = ?", (record_id,))
+            row = c.fetchone()
+
+            if row:
+                row_dict = dict(row)
+                office_name = row_dict['escritorio_origem']
+                table_name = f"office_{office_name.replace(' ', '_')}"
+                
+                # Garante que a tabela de destino existe antes de inserir
+                init_db() 
+
+                # 2. Insere na tabela de origem (usando a coluna 'escritorio' que é necessária)
+                cols = ['nome', 'cpf', 'escritorio', 'tipo_acao', 'data_fechamento', 
+                        'pendencias', 'numero_processo', 'data_protocolo', 
+                        'observacoes', 'captador', 'created_at']
+                
+                # Prepara os valores para a tabela de destino
+                values = [row_dict.get(k, '') for k in ['nome', 'cpf']]
+                values.append(office_name) # escritorio
+                values.extend([row_dict.get(k, '') for k in ['tipo_acao', 'data_fechamento', 'pendencias', 'numero_processo', 'data_protocolo', 'observacoes', 'captador', 'created_at']])
+
+                placeholders = ', '.join(['?'] * len(cols))
+                
+                c.execute(f"INSERT INTO {table_name} ({', '.join(cols)}) VALUES ({placeholders})", values)
+                
+                # 3. Deleta da tabela 'excluidos'
+                c.execute("DELETE FROM excluidos WHERE id = ?", (record_id,))
+
+        conn.commit()
+            
+    except sqlite3.OperationalError as e:
+        conn.close()
+        return f"Erro ao restaurar/mover em lote: {e}", 500
         
-    p.setFont("Helvetica-Bold", 14); p.drawString(120, y, "Sistema de Registro de Clientes")
-    p.setFont("Helvetica", 10); p.drawString(120, y-16, f"Geração: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
-    y -= 40
+    conn.close()
+    return redirect(url_for('excluidos'))
+
+
+# =========================================================================
+# ROTAS DE EXPORTAÇÃO
+# =========================================================================
+
+@app.route('/export/csv')
+def export_csv():
+    office = request.args.get('office', 'Central')
+    conn = get_conn()
+    c = conn.cursor()
     
+    tables = []
+    if office.lower() == 'all':
+        tables = get_offices()
+    elif office == 'excluidos':
+        tables = ['excluidos']
+    else:
+        tables = [f"office_{office.replace(' ', '_')}"]
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, delimiter=';') # Mantendo o delimitador ';'
+
     for t in tables:
-        p.setFont("Helvetica-Bold", 12); p.drawString(40, y, f"Tabela: {t}"); y -= 16
+        writer.writerow([f"Tabela: {t}"]) # Cabeçalho da tabela
         try:
-            # Pega as colunas da tabela
-            cur_cols = [d[0] for d in c.execute(f"PRAGMA table_info({t})")]
-            
-            # Formata a string de título
-            title_str = " | ".join([col.upper() for col in cur_cols])
-            
-            # Desenha o cabeçalho das colunas (uma linha)
-            if y < 80: p.showPage(); y = height - 80
-            p.setFont("Helvetica-Bold", 8)
-            p.drawString(40, y, title_str)
-            y -= 10
-            
-            # Desenha os dados
-            for row in c.execute(f"SELECT * FROM {t}"):
-                if y < 80: p.showPage(); y = height - 80
-                p.setFont("Helvetica", 7) # Fonte menor para caber mais
-                row_str = " | ".join([str(v) if v is not None else '' for v in row])
-                p.drawString(40, y, row_str)
-                y -= 10
-            
-            y -= 16 # Espaço extra entre tabelas
-            
-        except sqlite3.OperationalError:
-            p.setFont("Helvetica-Bold", 10); p.drawString(40, y, f"Erro: Tabela {t} não encontrada ou vazia.")
-            y -= 16
-            
-    p.save()
+            c.execute(f"SELECT * FROM {t}")
+            rows = c.fetchall()
+            if rows:
+                cols = [d[0] for d in c.description]
+                writer.writerow(cols) # Nomes das colunas
+                for row in rows:
+                    writer.writerow([str(r) for r in row]) # Dados
+            else:
+                writer.writerow(["Sem registros."])
+        except:
+            writer.writerow(["Erro ao ler a tabela ou tabela não encontrada."])
+        writer.writerow([]) # Linha em branco para separar tabelas
+
+    conn.close()
+    buffer.seek(0)
     
+    # Envia o arquivo CSV
+    return send_file(io.BytesIO(buffer.getvalue().encode('utf-8')), 
+                     mimetype='text/csv', 
+                     as_attachment=True, 
+                     download_name=f'registros_{office}_{datetime.now().strftime("%Y%m%d%H%M%S")}.csv')
+
+
 @app.route('/export/pdf')
 def export_pdf():
     office = request.args.get('office', 'Central')
     conn = get_conn()
     c = conn.cursor()
     
+    tables = []
     if office.lower() == 'all':
-        tables = get_table_names(include_excluidos=True)
-        download_name = 'todos_registros.pdf'
+        tables = get_offices()
+    elif office == 'excluidos':
+        tables = ['excluidos']
     else:
         tables = [f"office_{office.replace(' ', '_')}"]
-        download_name = f"{office.replace(' ', '_')}_registros.pdf"
-
+    
     buffer = io.BytesIO()
-    generate_pdf_from_rows(c, tables, buffer)
-    buffer.seek(0)
-    conn.close()
+    p = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+    y = height - 80
 
-    return send_file(buffer, mimetype='application/pdf', as_attachment=True, download_name=download_name)
+    # Lógica de cabeçalho do PDF (Logo, Título, Data)
+    logo_path = os.path.join(app.root_path, 'logo', 'logo.png') # Corrigido para caminho absoluto
+    if os.path.exists(logo_path):
+        try: p.drawImage(logo_path, 40, y-20, width=60, preserveAspectRatio=True)
+        except: pass
 
-
-@app.route('/export/csv')
-def export_csv():
-    office = request.args.get('office', 'Central')
-    table_name = f"office_{office.replace(' ', '_')}"
-    download_name = f"{table_name}_registros.csv"
+    p.setFont("Helvetica-Bold", 14)
+    p.drawString(120, y, "Sistema de Registro de Clientes")
+    p.setFont("Helvetica", 10)
+    p.drawString(120, y-16, f"Geração: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+    y -= 40
     
-    conn = get_conn()
-    c = conn.cursor()
-    buffer = io.StringIO()
-    writer = csv.writer(buffer, delimiter=';') # Usando ';' para evitar problemas com vírgulas em textos
-
-    try:
-        # Pega os nomes das colunas (cabeçalho)
-        c.execute(f"SELECT * FROM {table_name} LIMIT 0")
-        col_names = [d[0] for d in c.description]
-        writer.writerow(col_names)
-
-        # Pega os dados
-        c.execute(f"SELECT * FROM {table_name}")
-        writer.writerows(c.fetchall())
+    # Renderização dos dados no PDF
+    for t in tables:
+        p.setFont("Helvetica-Bold", 12)
+        p.drawString(40, y, f"Tabela: {t}"); y -= 16
+        try:
+            # Pega as colunas para o cabeçalho da tabela no PDF
+            cols = [d[0] for d in c.execute(f"PRAGMA table_info({t})")]
+            
+            # Cabeçalho da tabela (colunas)
+            header_y = y
+            x_offset = 50
+            for col in cols:
+                if header_y < 80: p.showPage(); y = height - 80; header_y = y
+                p.setFont("Helvetica-Bold", 8)
+                p.drawString(x_offset, header_y, col.upper())
+                x_offset += 80 # Espaçamento
+            y -= 12
+            
+            # Dados
+            for row in c.execute(f"SELECT * FROM {t}"):
+                if y < 80: p.showPage(); y = height - 80 # Nova página
+                
+                p.setFont("Helvetica", 7)
+                x_offset = 50
+                for data in row:
+                    p.drawString(x_offset, y, str(data))
+                    x_offset += 80
+                y -= 12
+                
+        except:
+            p.setFont("Helvetica", 9)
+            p.drawString(40, y, "Erro ao ler a tabela ou tabela não encontrada.")
+            y -= 12
         
-    except sqlite3.OperationalError:
-        writer.writerow(["Erro", "Tabela não encontrada"])
+        y -= 20 # Espaço entre tabelas
+        if y < 80: p.showPage(); y = height - 80
 
-    conn.close()
+    p.save()
     buffer.seek(0)
     
-    return send_file(io.BytesIO(buffer.getvalue().encode('utf-8')), 
-                     mimetype='text/csv', 
+    # Envia o arquivo PDF
+    return send_file(buffer, 
+                     mimetype='application/pdf', 
                      as_attachment=True, 
-                     download_name=download_name)
+                     download_name=f'registros_{office}_{datetime.now().strftime("%Y%m%d%H%M%S")}.pdf')
 
-# --- Inicialização ---
 
 if __name__ == '__main__':
-    # Garante que o banco e a tabela Central existam ao iniciar localmente
-    init_db() 
+    # Apenas para desenvolvimento local
     app.run(debug=True)

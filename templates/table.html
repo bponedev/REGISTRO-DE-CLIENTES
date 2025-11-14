@@ -3,66 +3,98 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Registros — Sistema</title>
+  <title>Registros de Clientes</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
+
 <body>
-  <div class="container">
-    <aside class="sidebar">
-      <span class="brand">Sistema de Registro de Clientes</span>
-      <a href="{{ url_for('index') }}">Novo cadastro</a>
-      <a href="{{ url_for('table') }}">Ver registros</a>
-      <a href="{{ url_for('excluidos') }}">Ver excluídos</a>
-    </aside>
-    <main class="main">
-      <div class="card">
-        <h1>Registros - Escritório: {{ office }}</h1>
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <div>
-            <button id="btn-delete-selected" class="btn">Excluir selecionados</button>
-          </div>
-          <div>
-            <a class="btn ghost" href="{{ url_for('export_csv', office='all') }}">Exportar CSV - Todas</a>
-            <a class="btn ghost" href="{{ url_for('export_pdf', office='all') }}" target="_blank">Exportar PDF - Todas</a>
-          </div>
-        </div>
+<div class="container">
 
-        <div class="table-wrap" style="margin-top:12px;">
-          <table>
-            <thead><tr><th><input id="select-all" type="checkbox"></th><th>id</th><th>nome</th><th>cpf</th><th>escritório</th><th>tipo_acao</th><th>data_fechamento</th><th>pendencias</th><th>numero_processo</th><th>data_protocolo</th><th>observacoes</th><th>captador</th><th>created_at</th><th>Ações</th></tr></thead>
-            <tbody>
-              {% for r in rows %}
-              <tr>
-                <td><input class="row-select" type="checkbox" value="{{ r['id'] }}"></td>
-                <td>{{ r['id'] }}</td>
-                <td>{{ r['nome'] }}</td>
-                <td>{{ r['cpf'] }}</td>
-                <td>{{ r['escritorio'] }}</td>
-                <td>{{ r['tipo_acao'] }}</td>
-                <td>{{ r['data_fechamento'] }}</td>
-                <td>{{ r['pendencias'] }}</td>
-                <td>{{ r['numero_processo'] }}</td>
-                <td>{{ r['data_protocolo'] }}</td>
-                <td>{{ r['observacoes'] }}</td>
-                <td>{{ r['captador'] }}</td>
-                <td>{{ r['created_at'] }}</td>
-                <td>
-                  <form action="{{ url_for('delete') }}" method="post" style="display:inline" onsubmit="return confirm('Deseja realmente excluir este cliente?');">
-                    <input type="hidden" name="table" value="office_{{ office }}">
-                    <input type="hidden" name="id" value="{{ r['id'] }}">
-                    <button class="btn ghost" type="submit">Excluir</button>
-                  </form>
-                </td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
+  <aside class="sidebar">
+    <span class="brand">Sistema de Registro de Clientes</span>
+    <a href="{{ url_for('index') }}">Novo cadastro</a>
+    <a href="{{ url_for('table', office=office) }}">Ver registros</a>
+    <a href="{{ url_for('excluidos') }}">Ver excluídos</a>
+  </aside>
 
-      </div>
-    </main>
-  </div>
-  <input type="hidden" name="office" value="{{ office }}">
-  <script src="{{ url_for('static', filename='script.js') }}"></script>
+  <main class="main">
+
+    <div class="card">
+      <h1>Registros — Escritório: {{ office }}</h1>
+
+      <!-- Selecionar escritório -->
+      <label class="field">
+        <span>Escolher escritório:</span>
+        <select id="office-select">
+          <option value="Central" {% if office == 'Central' %}selected{% endif %}>Central</option>
+          <option value="campos" {% if office == 'campos' %}selected{% endif %}>Campos</option>
+          <option value="rio" {% if office == 'rio' %}selected{% endif %}>Rio</option>
+          <option value="sao_paulo" {% if office == 'sao_paulo' %}selected{% endif %}>São Paulo</option>
+        </select>
+      </label>
+
+      <script>
+        document.getElementById("office-select").addEventListener("change", function () {
+          const office = this.value;
+          window.location.href = "/table?office=" + office;
+        });
+      </script>
+
+      {% if rows %}
+      <table>
+        <thead>
+          <tr>
+            <th>Sel</th>
+            <th>ID</th>
+            <th>Nome</th>
+            <th>CPF</th>
+            <th>Tipo</th>
+            <th>Fechamento</th>
+            <th>Pendências</th>
+            <th>Processo</th>
+            <th>Protocolo</th>
+            <th>Observações</th>
+            <th>Captador</th>
+            <th>Criado</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+          <tr>
+            <td><input type="checkbox" class="row-select" value="{{ r['id'] }}"></td>
+            <td>{{ r['id'] }}</td>
+            <td>{{ r['nome'] }}</td>
+            <td>{{ r['cpf'] }}</td>
+            <td>{{ r['tipo_acao'] }}</td>
+            <td>{{ r['data_fechamento'] }}</td>
+            <td>{{ r['pendencias'] }}</td>
+            <td>{{ r['numero_processo'] }}</td>
+            <td>{{ r['data_protocolo'] }}</td>
+            <td>{{ r['observacoes'] }}</td>
+            <td>{{ r['captador'] }}</td>
+            <td>{{ r['created_at'] }}</td>
+            <td>
+              <form action="/delete" method="post" style="display:inline;">
+                <input type="hidden" name="id" value="{{ r['id'] }}">
+                <input type="hidden" name="office" value="{{ office }}">
+                <button class="btn btn-danger" onclick="return confirm('Excluir este cliente?')">Excluir</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <button id="btn-delete-selected" class="btn btn-danger">Excluir selecionados</button>
+
+      {% else %}
+        <p>Nenhum registro encontrado para este escritório.</p>
+      {% endif %}
+    </div>
+  </main>
+</div>
+
+<script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>

@@ -3,103 +3,183 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Registros de Clientes</title>
+  <title>Registros — {{ office|replace('_',' ')|title }}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-
 <body>
-<div class="container">
+  <div class="container">
+    <aside class="sidebar">
+      <span class="brand">Sistema de Registro de Clientes</span>
+      <a href="{{ url_for('index') }}">Novo cadastro</a>
+      <a href="{{ url_for('table', office=office) }}">Ver registros</a>
+      <a href="{{ url_for('excluidos') }}">Ver excluídos</a>
+    </aside>
 
-  <aside class="sidebar">
-    <span class="brand">Sistema de Registro de Clientes</span>
-    <a href="{{ url_for('index') }}">Novo cadastro</a>
-    <a href="{{ url_for('table', office=office) }}">Ver registros</a>
-    <a href="{{ url_for('excluidos') }}">Ver excluídos</a>
-  </aside>
+    <main class="main">
+      <div class="card">
+        <h1>Registros — Escritório: {{ office|replace('_',' ')|title }}</h1>
 
-  <main class="main">
+        <!-- CONTROLS: office select / per_page / search / date filters -->
+        <div class="controls" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
+          <div>
+            <label>Escritório:
+              <select id="office-select">
+                {% for o in offices %}
+                  <option value="{{ o }}" {% if o==office %}selected{% endif %}>{{ o|replace('_',' ')|title }}</option>
+                {% endfor %}
+              </select>
+            </label>
+          </div>
 
-    <div class="card">
-      <h1>Registros — Escritório: {{ office }}</h1>
+          <div>
+            <label>Mostrar:
+              <select id="per-page-select">
+                <option value="10" {% if per_page==10 %}selected{% endif %}>10</option>
+                <option value="20" {% if per_page==20 %}selected{% endif %}>20</option>
+                <option value="50" {% if per_page==50 %}selected{% endif %}>50</option>
+                <option value="100" {% if per_page==100 %}selected{% endif %}>100</option>
+              </select>
+            </label>
+          </div>
 
-      <!-- Selecionar escritório -->
-      <label class="field">
-        <span>Escolher escritório:</span>
-        <select id="office-select">
-          <option value="central" {% if office == 'central' %}selected{% endif %}>Central</option>
-          <option value="campos" {% if office == 'campos' %}selected{% endif %}>Campos</option>
-          <option value="rio" {% if office == 'rio' %}selected{% endif %}>Rio</option>
-          <option value="sao_paulo" {% if office == 'sao_paulo' %}selected{% endif %}>São Paulo</option>
-        </select>
-      </label>
+          <form id="search-form" style="display:flex;gap:6px;align-items:center;">
+            <label>Buscar por:
+              <select name="filtro" id="filtro-select">
+                <option value="nome" {% if filtro=='nome' %}selected{% endif %}>Nome</option>
+                <option value="cpf" {% if filtro=='cpf' %}selected{% endif %}>CPF</option>
+                <option value="id" {% if filtro=='id' %}selected{% endif %}>ID</option>
+              </select>
+            </label>
+            <input type="text" name="valor" id="valor-search" placeholder="Digite e pressione buscar" value="{{ valor }}">
+            <button type="submit" class="btn">Buscar</button>
+          </form>
 
-      <script>
-        document.getElementById("office-select").addEventListener("change", function () {
-          const office = this.value;
-          window.location.href = "/table?office=" + office;
-        });
-      </script>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <label>Filtrar data:
+              <select id="data-tipo-select">
+                <option value="">(sem)</option>
+                <option value="data_fechamento" {% if data_tipo=='data_fechamento' %}selected{% endif %}>Data de fechamento</option>
+                <option value="data_protocolo" {% if data_tipo=='data_protocolo' %}selected{% endif %}>Data de protocolo</option>
+              </select>
+            </label>
+            <label>De: <input type="date" id="data-de" value="{{ data_de }}"></label>
+            <label>Até: <input type="date" id="data-ate" value="{{ data_ate }}"></label>
+            <button id="apply-date-filter" class="btn ghost">Aplicar</button>
+          </div>
+        </div>
 
-      {% if rows %}
-      <table>
-        <thead>
-          <tr>
-            <th>Sel</th>
-            <th>ID</th>
-            <th>Nome</th>
-            <th>CPF</th>
-            <th>Tipo</th>
-            <th>Fech.</th>
-            <th>Pend.</th>
-            <th>Processo</th>
-            <th>Protocolo</th>
-            <th>Observações</th>
-            <th>Captador</th>
-            <th>Criado</th>
-            <th>Ações</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for r in rows %}
-          <tr>
-            <td><input type="checkbox" class="row-select" value="{{ r[0] }}"></td>
-            <td>{{ r[0] }}</td>
-            <td>{{ r[1] }}</td>
-            <td>{{ r[2] }}</td>
-            <td>{{ r[4] }}</td>
-            <td>{{ r[5] }}</td>
-            <td>{{ r[6] }}</td>
-            <td>{{ r[7] }}</td>
-            <td>{{ r[8] }}</td>
-            <td>{{ r[9] }}</td>
-            <td>{{ r[10] }}</td>
-            <td>{{ r[11] }}</td>
-            <td>
-              <a class="btn btn-edit" href="/edit?id={{ r[0] }}&office={{ office }}">Editar</a>
+        <!-- ACTIONS -->
+        <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">
+          <button id="btn-delete-selected" class="btn btn-danger">Excluir selecionados</button>
 
-              <form action="/delete" method="post" style="display:inline;">
-                <input type="hidden" name="id" value="{{ r[0] }}">
-                <input type="hidden" name="office" value="{{ office }}">
-                <button class="btn btn-danger" onclick="return confirm('Excluir este cliente?')">Excluir</button>
-              </form>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+          <label style="display:flex;gap:6px;align-items:center;">
+            Mover selecionados para:
+            <select id="migrate-target-select">
+              {% for o in offices %}
+                {% if o!=office %}
+                  <option value="{{ o }}">{{ o|replace('_',' ')|title }}</option>
+                {% endif %}
+              {% endfor %}
+            </select>
+            <button id="btn-migrate-selected" class="btn">Mover</button>
+          </label>
 
-      <form id="form-delete-selected" action="/delete_selected" method="post">
-        <input type="hidden" name="office" value="{{ office }}">
-        <button id="btn-delete-selected" class="btn btn-danger">Excluir selecionados</button>
-      </form>
+          <a class="btn ghost" href="{{ url_for('export_csv', office=office) }}">Exportar CSV</a>
+          <a class="btn ghost" href="{{ url_for('export_pdf', office=office) }}">Exportar PDF</a>
+        </div>
 
-      {% else %}
-        <p>Nenhum registro encontrado para este escritório.</p>
-      {% endif %}
-    </div>
-  </main>
-</div>
+        <!-- TABLE -->
+        {% if rows %}
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th><input id="select-all" type="checkbox"></th>
+                <th>ID</th>
+                <th>Nome</th>
+                <th>CPF</th>
+                <th>Tipo</th>
+                <th>Fech.</th>
+                <th>Pend.</th>
+                <th>Processo</th>
+                <th>Protocolo</th>
+                <th>Obs</th>
+                <th>Captador</th>
+                <th>Criado</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in rows %}
+              <tr>
+                <td><input class="row-select" type="checkbox" value="{{ r[0] }}"></td>
+                <td>{{ r[0] }}</td>
+                <td>{{ r[1] }}</td>
+                <td>{{ r[2] }}</td>
+                <td>{{ r[4] }}</td>
+                <td>{{ r[5] }}</td>
+                <td>{{ r[6] }}</td>
+                <td>{{ r[7] }}</td>
+                <td>{{ r[8] }}</td>
+                <td>{{ r[9] }}</td>
+                <td>{{ r[10] }}</td>
+                <td>{{ r[11] }}</td>
+                <td>
+                  <a class="btn" href="{{ url_for('edit') }}?id={{ r[0] }}&office={{ office }}">Editar</a>
 
-<script src="{{ url_for('static', filename='script.js') }}"></script>
+                  <form action="{{ url_for('delete') }}" method="post" style="display:inline;">
+                    <input type="hidden" name="id" value="{{ r[0] }}">
+                    <input type="hidden" name="office" value="{{ office }}">
+                    <button class="btn btn-danger" onclick="return confirm('Excluir este cliente?')">Excluir</button>
+                  </form>
+
+                  <!-- Mover individual -->
+                  <form class="migrate-form" action="{{ url_for('migrate') }}" method="post" style="display:inline;">
+                    <input type="hidden" name="id" value="{{ r[0] }}">
+                    <input type="hidden" name="office_current" value="{{ office }}">
+                    <select name="office_target" class="migrate-target-inline">
+                      {% for o in offices %}
+                        {% if o!=office %}
+                          <option value="{{ o }}">{{ o|replace('_',' ')|title }}</option>
+                        {% endif %}
+                      {% endfor %}
+                    </select>
+                    <button class="btn" onclick="return confirm('Mover este registro?')">Mover</button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <!-- PAGINAÇÃO -->
+        <div class="pagination" style="margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <span>Mostrando {{ ((page-1)*per_page)+1 }} - {{ ((page-1)*per_page)+rows|length }} de {{ total }}</span>
+
+          <div style="display:flex;gap:6px;align-items:center;">
+            {% if page>1 %}
+              <a class="btn" href="{{ url_for('table') }}?office={{ office }}&page={{ page-1 }}&per_page={{ per_page }}{% if filtro %}&filtro={{ filtro }}&valor={{ valor }}{% endif %}{% if data_tipo %}&data_tipo={{ data_tipo }}&data_de={{ data_de }}&data_ate={{ data_ate }}{% endif %}">« Anterior</a>
+            {% endif %}
+            <span>Página {{ page }} / {{ total_pages }}</span>
+            {% if page<total_pages %}
+              <a class="btn" href="{{ url_for('table') }}?office={{ office }}&page={{ page+1 }}&per_page={{ per_page }}{% if filtro %}&filtro={{ filtro }}&valor={{ valor }}{% endif %}{% if data_tipo %}&data_tipo={{ data_tipo }}&data_de={{ data_de }}&data_ate={{ data_ate }}{% endif %}">Próximo »</a>
+            {% endif %}
+          </div>
+        </div>
+
+        {% else %}
+          <p>Nenhum registro encontrado.</p>
+        {% endif %}
+
+      </div>
+    </main>
+  </div>
+
+  <script>
+    // keep current query parameters when controls change
+    const baseUrl = "{{ url_for('table') }}";
+  </script>
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>

@@ -1,67 +1,104 @@
-// ===============================================
-// Selecionar / desselecionar todos os checkboxes
-// ===============================================
-document.addEventListener("DOMContentLoaded", () => {
-    const selectAll = document.getElementById("select-all");
-    const rowSelects = document.querySelectorAll(".row-select");
+// /static/script.js
+document.addEventListener('DOMContentLoaded', function () {
+  // toast helper
+  function showToast(msg, timeout=2500) {
+    const t = document.getElementById('toast');
+    if (!t) return;
+    t.innerText = msg;
+    t.style.display = 'block';
+    setTimeout(()=> t.style.display = 'none', timeout);
+  }
 
-    if (selectAll) {
-        selectAll.addEventListener("change", () => {
-            rowSelects.forEach(chk => chk.checked = selectAll.checked);
-        });
-    }
+  // select all
+  const selectAll = document.getElementById('select-all');
+  if (selectAll) {
+    selectAll.addEventListener('change', () => {
+      document.querySelectorAll('.row-select').forEach(cb => cb.checked = selectAll.checked);
+    });
+  }
+  const selectAllExcl = document.getElementById('select-all-excl');
+  if (selectAllExcl) {
+    selectAllExcl.addEventListener('change', () => {
+      document.querySelectorAll('.row-select').forEach(cb => cb.checked = selectAllExcl.checked);
+    });
+  }
 
-    // ===============================================
-    // Enviar IDs selecionados para exclusão em massa
-    // ===============================================
-    const deleteForm = document.getElementById("deleteSelectedForm");
-    if (deleteForm) {
-        deleteForm.addEventListener("submit", (e) => {
-            const ids = [...document.querySelectorAll(".row-select:checked")].map(c => c.value);
-            if (ids.length === 0) {
-                alert("Nenhum item selecionado.");
-                e.preventDefault();
-                return;
-            }
+  // delete selected form
+  const deleteForm = document.getElementById('deleteSelectedForm');
+  if (deleteForm) {
+    deleteForm.addEventListener('submit', (e) => {
+      const ids = [...document.querySelectorAll('.row-select:checked')].map(x=>x.value);
+      if (!ids.length) {
+        alert('Nenhum registro selecionado.');
+        e.preventDefault();
+        return;
+      }
+      if (!confirm('Deseja realmente excluir os registros selecionados?')) {
+        e.preventDefault();
+        return;
+      }
+      ids.forEach(id=>{
+        const inp = document.createElement('input');
+        inp.type='hidden'; inp.name='ids'; inp.value=id;
+        deleteForm.appendChild(inp);
+      });
+    });
+  }
 
-            ids.forEach(id => {
-                const input = document.createElement("input");
-                input.type = "hidden";
-                input.name = "ids";
-                input.value = id;
-                deleteForm.appendChild(input);
-            });
+  // migrate selected (top)
+  const topMoveSelect = document.getElementById('top-move-select');
+  const topActionsForm = document.getElementById('top-actions');
+  if (topActionsForm) {
+    topActionsForm.addEventListener('submit', (e)=>{
+      e.preventDefault();
+      const target = topMoveSelect.value;
+      if (!target) { alert('Selecione o escritório destino.'); return; }
+      const ids = [...document.querySelectorAll('.row-select:checked')].map(x=>x.value);
+      if (!ids.length) { alert('Nenhum registro selecionado.'); return; }
+      if (!confirm(`Deseja mover ${ids.length} registro(s) para ${target.replace(/_/g,' ')}?`)) return;
+      // append inputs and submit
+      ids.forEach(id=>{
+        const inp = document.createElement('input');
+        inp.type='hidden'; inp.name='ids'; inp.value=id;
+        topActionsForm.appendChild(inp);
+      });
+      const src = document.createElement('input');
+      src.type='hidden'; src.name='office_current'; src.value = document.querySelector('select[name="office"]').value || 'CENTRAL';
+      topActionsForm.appendChild(src);
+      topActionsForm.submit();
+    });
+  }
 
-            if (!confirm("Tem certeza que deseja excluir os itens selecionados?")) {
-                e.preventDefault();
-            }
-        });
-    }
+  // top single migrate via inline selects (confirmation + post)
+  document.querySelectorAll('select[name="office_target"]').forEach(sel=>{
+    sel.addEventListener('change', (ev)=>{
+      const newVal = sel.value;
+      if (!newVal) return;
+      const tr = sel.closest('tr');
+      const id = tr.querySelector('.row-select').value;
+      const office_current = document.querySelector('select[name="office"]').value || 'CENTRAL';
+      if (!confirm(`Mover este registro (ID ${id}) para ${newVal.replace(/_/g,' ')} ?`)) {
+        // reset select
+        sel.value = "";
+        return;
+      }
+      // create form and submit
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = '/migrate';
+      const inpId = document.createElement('input'); inpId.type='hidden'; inpId.name='id'; inpId.value = id; form.appendChild(inpId);
+      const inpFrom = document.createElement('input'); inpFrom.type='hidden'; inpFrom.name='office_current'; inpFrom.value = office_current; form.appendChild(inpFrom);
+      const inpTo = document.createElement('input'); inpTo.type='hidden'; inpTo.name='office_target'; inpTo.value = newVal; form.appendChild(inpTo);
+      document.body.appendChild(form);
+      form.submit();
+    });
+  });
 
-    // ===============================================
-    // Migração em massa
-    // ===============================================
-    const migrateForm = document.getElementById("migrateForm");
-    if (migrateForm) {
-        migrateForm.addEventListener("submit", (e) => {
-            const ids = [...document.querySelectorAll(".row-select:checked")].map(c => c.value);
-            if (ids.length === 0) {
-                alert("Nenhum item selecionado para mover.");
-                e.preventDefault();
-                return;
-            }
-
-            ids.forEach(id => {
-                const input = document.createElement("input");
-                input.type = "hidden";
-                input.name = "ids";
-                input.value = id;
-                migrateForm.appendChild(input);
-            });
-
-            if (!confirm("Confirmar migração dos clientes selecionados?")) {
-                e.preventDefault();
-            }
-        });
-    }
+  // apply small toast on page load if there are flash messages (the server renders flash messages)
+  const flashEls = document.querySelectorAll('.flash');
+  if (flashEls && flashEls.length>0) {
+    flashEls.forEach(fe => {
+      showToast(fe.textContent, 2200);
+    });
+  }
 });

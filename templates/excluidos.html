@@ -3,91 +3,84 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Registros Excluídos</title>
+  <title>Excluídos</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-
 <body>
-<div class="container">
+  <div class="container">
+    <aside class="sidebar">
+      <span class="brand">Sistema de Registro de Clientes</span>
+      <a href="{{ url_for('index') }}">Novo cadastro</a>
+      <a href="{{ url_for('table') }}">Ver registros</a>
+      <a href="{{ url_for('excluidos') }}">Ver excluídos</a>
+    </aside>
 
-  <aside class="sidebar">
-    <span class="brand">Sistema de Registro de Clientes</span>
-    <a href="{{ url_for('index') }}">Novo cadastro</a>
-    <a href="{{ url_for('table') }}">Ver registros</a>
-    <a href="{{ url_for('excluidos') }}">Ver excluídos</a>
-  </aside>
+    <main class="main">
+      <div class="card">
+        <h1>Registros Excluídos</h1>
 
-  <main class="main">
+        <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">
+          <button id="btn-restore-selected" class="btn">Restaurar selecionados</button>
+        </div>
 
-    <div class="card">
-      <h1>Registros Excluídos</h1>
+        {% if rows %}
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th><input id="select-all-excl" type="checkbox"></th>
+                <th>ID</th>
+                <th>Nome</th>
+                <th>CPF</th>
+                <th>Origem</th>
+                <th>Tipo</th>
+                <th>Fech.</th>
+                <th>Pend.</th>
+                <th>Processo</th>
+                <th>Protocolo</th>
+                <th>Obs</th>
+                <th>Captador</th>
+                <th>Criado</th>
+                <th>Excluído em</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in rows %}
+              <tr>
+                <td><input class="row-select" type="checkbox" value="{{ r[0] }}"></td>
+                <td>{{ r[0] }}</td>
+                <td>{{ r[1] }}</td>
+                <td>{{ r[2] }}</td>
+                <td>{{ r[3] }}</td>
+                <td>{{ r[4] }}</td>
+                <td>{{ r[5] }}</td>
+                <td>{{ r[6] }}</td>
+                <td>{{ r[7] }}</td>
+                <td>{{ r[8] }}</td>
+                <td>{{ r[9] }}</td>
+                <td>{{ r[10] }}</td>
+                <td>{{ r[11] }}</td>
+                <td>{{ r[12] }}</td>
+                <td>
+                  <form action="{{ url_for('restore') }}" method="post" style="display:inline;">
+                    <input type="hidden" name="id" value="{{ r[0] }}">
+                    <button class="btn" onclick="return confirm('Restaurar este registro?')">Restaurar</button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
 
-      {% if rows %}
-      <table>
-        <thead>
-          <tr>
-            <th>Sel</th>
-            <th>ID</th>
-            <th>Nome</th>
-            <th>CPF</th>
-            <th>Escritório origem</th>
-            <th>Tipo ação</th>
-            <th>Fechamento</th>
-            <th>Pendências</th>
-            <th>Nº Processo</th>
-            <th>Protocolo</th>
-            <th>Observações</th>
-            <th>Captador</th>
-            <th>Criado em</th>
-            <th>Excluído em</th>
-            <th>Ações</th>
-          </tr>
-        </thead>
+        {% else %}
+          <p>Nenhum registro excluído.</p>
+        {% endif %}
+      </div>
+    </main>
+  </div>
 
-        <tbody>
-        {% for r in rows %}
-        <tr>
-          <td><input type="checkbox" class="row-select" value="{{ r[0] }}"></td>
-          <td>{{ r[0] }}</td>
-          <td>{{ r[1] }}</td>
-          <td>{{ r[2] }}</td>
-          <td>{{ r[3] }}</td>
-          <td>{{ r[4] }}</td>
-          <td>{{ r[5] }}</td>
-          <td>{{ r[6] }}</td>
-          <td>{{ r[7] }}</td>
-          <td>{{ r[8] }}</td>
-          <td>{{ r[9] }}</td>
-          <td>{{ r[10] }}</td>
-          <td>{{ r[11] }}</td>
-          <td>{{ r[12] }}</td>
-
-          <td>
-            <form action="/restore" method="post" style="display:inline;">
-              <input type="hidden" name="id" value="{{ r[0] }}">
-              <input type="hidden" name="office" value="{{ r[3] }}">
-              <button class="btn btn-edit" onclick="return confirm('Restaurar este registro?')">Restaurar</button>
-            </form>
-          </td>
-        </tr>
-        {% endfor %}
-        </tbody>
-
-      </table>
-
-      <form id="form-restore-selected" action="/restore_selected" method="post">
-        <button id="btn-restore-selected" class="btn btn-edit">Restaurar selecionados</button>
-      </form>
-
-      {% else %}
-        <p>Nenhum registro excluído.</p>
-      {% endif %}
-    </div>
-
-  </main>
-
-</div>
-
-<script src="{{ url_for('static', filename='script.js') }}"></script>
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>

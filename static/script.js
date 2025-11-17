@@ -1,7 +1,6 @@
 // /static/script.js
 document.addEventListener('DOMContentLoaded', function () {
-  // toast helper
-  function showToast(msg, timeout=2500) {
+  function showToast(msg, timeout=2200) {
     const t = document.getElementById('toast');
     if (!t) return;
     t.innerText = msg;
@@ -9,21 +8,14 @@ document.addEventListener('DOMContentLoaded', function () {
     setTimeout(()=> t.style.display = 'none', timeout);
   }
 
-  // select all
   const selectAll = document.getElementById('select-all');
   if (selectAll) {
     selectAll.addEventListener('change', () => {
       document.querySelectorAll('.row-select').forEach(cb => cb.checked = selectAll.checked);
     });
   }
-  const selectAllExcl = document.getElementById('select-all-excl');
-  if (selectAllExcl) {
-    selectAllExcl.addEventListener('change', () => {
-      document.querySelectorAll('.row-select').forEach(cb => cb.checked = selectAllExcl.checked);
-    });
-  }
 
-  // delete selected form
+  // delete selected
   const deleteForm = document.getElementById('deleteSelectedForm');
   if (deleteForm) {
     deleteForm.addEventListener('submit', (e) => {
@@ -45,7 +37,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // migrate selected (top)
+  // top move selected
   const topMoveSelect = document.getElementById('top-move-select');
   const topActionsForm = document.getElementById('top-actions');
   if (topActionsForm) {
@@ -56,45 +48,47 @@ document.addEventListener('DOMContentLoaded', function () {
       const ids = [...document.querySelectorAll('.row-select:checked')].map(x=>x.value);
       if (!ids.length) { alert('Nenhum registro selecionado.'); return; }
       if (!confirm(`Deseja mover ${ids.length} registro(s) para ${target.replace(/_/g,' ')}?`)) return;
-      // append inputs and submit
       ids.forEach(id=>{
         const inp = document.createElement('input');
         inp.type='hidden'; inp.name='ids'; inp.value=id;
         topActionsForm.appendChild(inp);
       });
       const src = document.createElement('input');
-      src.type='hidden'; src.name='office_current'; src.value = document.querySelector('select[name="office"]').value || 'CENTRAL';
+      src.type='hidden'; src.name='office_current'; src.value = (document.querySelector('select[name="office"]')||{value:'CENTRAL'}).value;
       topActionsForm.appendChild(src);
       topActionsForm.submit();
     });
   }
 
-  // top single migrate via inline selects (confirmation + post)
-  document.querySelectorAll('select[name="office_target"]').forEach(sel=>{
+  // inline select change -> confirmation -> POST to /migrate
+  document.querySelectorAll('.inline-migrate-select').forEach(sel=>{
     sel.addEventListener('change', (ev)=>{
-      const newVal = sel.value;
-      if (!newVal) return;
+      const toKey = sel.value;
+      if (!toKey) return;
       const tr = sel.closest('tr');
-      const id = tr.querySelector('.row-select').value;
-      const office_current = document.querySelector('select[name="office"]').value || 'CENTRAL';
-      if (!confirm(`Mover este registro (ID ${id}) para ${newVal.replace(/_/g,' ')} ?`)) {
-        // reset select
+      const idInput = tr.querySelector('.row-select');
+      if (!idInput) { sel.value = ""; return; }
+      const id = idInput.value;
+      const office_current = (document.querySelector('select[name="office"]')||{value:'CENTRAL'}).value;
+      // confirmation (option C)
+      const display = sel.options[sel.selectedIndex].text;
+      if (!confirm(`Confirmar mover o registro ID ${id} para ${display}?`)) {
         sel.value = "";
         return;
       }
-      // create form and submit
+      // post via form
       const form = document.createElement('form');
       form.method = 'POST';
       form.action = '/migrate';
       const inpId = document.createElement('input'); inpId.type='hidden'; inpId.name='id'; inpId.value = id; form.appendChild(inpId);
       const inpFrom = document.createElement('input'); inpFrom.type='hidden'; inpFrom.name='office_current'; inpFrom.value = office_current; form.appendChild(inpFrom);
-      const inpTo = document.createElement('input'); inpTo.type='hidden'; inpTo.name='office_target'; inpTo.value = newVal; form.appendChild(inpTo);
+      const inpTo = document.createElement('input'); inpTo.type='hidden'; inpTo.name='office_target'; inpTo.value = toKey; form.appendChild(inpTo);
       document.body.appendChild(form);
       form.submit();
     });
   });
 
-  // apply small toast on page load if there are flash messages (the server renders flash messages)
+  // show server flash messages as toast
   const flashEls = document.querySelectorAll('.flash');
   if (flashEls && flashEls.length>0) {
     flashEls.forEach(fe => {

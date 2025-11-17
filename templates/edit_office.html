@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h1>Renomear Escritório</h1>
+
+<div class="card">
+  <form action="{{ url_for('rename_office') }}" method="post">
+    <input type="hidden" name="office_old" value="{{ office }}">
+
+    <label class="field">
+      Nome atual: <strong>{{ office }}</strong>
+    </label>
+
+    <label class="field">
+      Novo nome (livre)
+      <input name="office_new" required>
+    </label>
+
+    <button class="btn">Renomear</button>
+  </form>
+</div>
+
+{% endblock %}

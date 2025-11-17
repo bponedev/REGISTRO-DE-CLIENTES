@@ -74,13 +74,16 @@
             <td>{{ r['observacoes'] }}</td>
             <td>{{ r['captador'] }}</td>
             <td>{{ r['created_at'] }}</td>
-            <td>
-              <form action="/delete" method="post" style="display:inline;">
-                <input type="hidden" name="id" value="{{ r['id'] }}">
-                <input type="hidden" name="office" value="{{ office }}">
-                <button class="btn btn-danger" onclick="return confirm('Excluir este cliente?')">Excluir</button>
-              </form>
-            </td>
+         <td>
+  <a class="btn btn-edit" href="/edit?id={{ r['id'] }}&office={{ office }}">Editar</a>
+
+  <form action="/delete" method="post" style="display:inline;">
+    <input type="hidden" name="id" value="{{ r['id'] }}">
+    <input type="hidden" name="office" value="{{ office }}">
+    <button class="btn btn-danger" onclick="return confirm('Excluir este cliente?')">Excluir</button>
+  </form>
+</td>
+
           </tr>
           {% endfor %}
         </tbody>

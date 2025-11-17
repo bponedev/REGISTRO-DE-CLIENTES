@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h1>Gerenciar Escritórios</h1>
+
+<table>
+  <tr>
+    <th>Escritório</th>
+    <th>Ações</th>
+  </tr>
+
+  {% for o in offices %}
+  <tr>
+    <td>{{ o }}</td>
+    <td>
+      <a class="btn-small" href="{{ url_for('edit_office', office=o) }}">Renomear</a>
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+
+{% endblock %}

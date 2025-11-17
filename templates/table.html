@@ -1,138 +1,122 @@
 {% extends "base.html" %}
 {% block content %}
+<h1>REGISTROS — {{ office }}</h1>
 
-<h1>Registros – Escritório {{ office }}</h1>
-
-<div class="filters">
-
-  <!-- Seleção de escritório -->
+<div class="controls-row">
   <form method="get" action="{{ url_for('table') }}" class="inline-form">
-    <label>Escritório:
+    <label>ESCRITÓRIO:
       <select name="office" onchange="this.form.submit()">
+        <option value="ALL" {% if office == 'ALL' %}selected{% endif %}>TODOS</option>
         {% for o in offices %}
-          <option value="{{ o }}" {% if o == office %}selected{% endif %}>{{ o }}</option>
+          <option value="{{ o.key }}" {% if o.key == office %}selected{% endif %}>{{ o.display }}</option>
         {% endfor %}
       </select>
     </label>
   </form>
 
-  <!-- Busca -->
-  <form method="get" action="{{ url_for('table') }}" class="inline-form">
+  <form id="searchForm" method="get" action="{{ url_for('table') }}" class="inline-form">
     <input type="hidden" name="office" value="{{ office }}">
-    <label>Buscar por:
+    <label>BUSCAR POR:
       <select name="filtro">
         <option value="">Nenhum</option>
-        <option value="nome" {% if filtro == 'nome' %}selected{% endif %}>Nome</option>
-        <option value="cpf" {% if filtro == 'cpf' %}selected{% endif %}>CPF</option>
-        <option value="id" {% if filtro == 'id' %}selected{% endif %}>ID</option>
+        <option value="nome" {% if filtro=='nome' %}selected{% endif %}>NOME</option>
+        <option value="cpf" {% if filtro=='cpf' %}selected{% endif %}>CPF</option>
+        <option value="id" {% if filtro=='id' %}selected{% endif %}>ID</option>
       </select>
     </label>
-
-    <input name="valor" placeholder="Digite o valor" value="{{ valor }}">
-    <button class="btn-small" type="submit">Buscar</button>
+    <input name="valor" placeholder="Digite e pressione BUSCAR" value="{{ valor }}">
+    <button class="btn-small" type="submit">BUSCAR</button>
   </form>
 
-  <!-- Filtros de data -->
-  <form method="get" action="{{ url_for('table') }}" class="inline-form">
+  <form id="dateForm" method="get" action="{{ url_for('table') }}" class="inline-form">
     <input type="hidden" name="office" value="{{ office }}">
-    <label>
-      Filtrar por:
+    <label>FILTRAR DATA:
       <select name="data_tipo">
-        <option value="">Nenhum</option>
-        <option value="data_fechamento" {% if data_tipo=='data_fechamento' %}selected{% endif %}>Data de fechamento</option>
-        <option value="data_protocolo" {% if data_tipo=='data_protocolo' %}selected{% endif %}>Data de protocolo</option>
+        <option value="">(sem)</option>
+        <option value="data_fechamento" {% if data_tipo=='data_fechamento' %}selected{% endif %}>DATA FECHAMENTO</option>
+        <option value="data_protocolo" {% if data_tipo=='data_protocolo' %}selected{% endif %}>DATA PROTOCOLO</option>
       </select>
     </label>
-
-    <label>De <input type="date" name="data_de" value="{{ data_de }}"></label>
-    <label>Até <input type="date" name="data_ate" value="{{ data_ate }}"></label>
-
-    <button class="btn-small" type="submit">Filtrar</button>
+    <label>DE <input type="date" name="data_de" value="{{ data_de }}"></label>
+    <label>ATÉ <input type="date" name="data_ate" value="{{ data_ate }}"></label>
+    <button class="btn-small" type="submit">APLICAR</button>
   </form>
 
-</div>
-
-<!-- Migração em lote -->
-<form method="post" action="{{ url_for('migrate_selected') }}" id="migrateForm">
-  <input type="hidden" name="office_current" value="{{ office }}">
-
-  <label>Mover selecionados para:
-    <select name="office_target" required>
-      <option value="">Selecione...</option>
-      {% for o in offices %}
-        {% if o != office %}
-          <option value="{{ o }}">{{ o }}</option>
-        {% endif %}
-      {% endfor %}
-    </select>
-  </label>
-  <button class="btn-small" type="submit">Mover</button>
-</form>
-
-
-<table>
-  <tr>
-    <th><input type="checkbox" id="select-all"></th>
-    <th>ID</th>
-    <th>Nome</th>
-    <th>CPF</th>
-    <th>Ação</th>
-    <th>Ações</th>
-  </tr>
-
-  {% for r in rows %}
-  <tr>
-    <td><input type="checkbox" class="row-select" value="{{ r[0] }}"></td>
-    <td>{{ r[0] }}</td>
-    <td>{{ r[1] }}</td>
-    <td>{{ r[2] }}</td>
-    <td>{{ r[4] }}</td>
-
-    <td>
-      <form action="{{ url_for('delete') }}" method="post" onsubmit="return confirm('Excluir?')">
-        <input type="hidden" name="id" value="{{ r[0] }}">
-        <input type="hidden" name="office" value="{{ office }}">
-        <button class="btn-small danger">Excluir</button>
-      </form>
-
-      <a class="btn-small" href="{{ url_for('edit', id=r[0], office=office) }}">Editar</a>
-
-      <form action="{{ url_for('migrate') }}" method="post" class="inline-form">
-        <input type="hidden" name="id" value="{{ r[0] }}">
-        <input type="hidden" name="office_current" value="{{ office }}">
-        <select name="office_target">
+  <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+    <form id="top-actions" method="post" action="{{ url_for('migrate_selected') }}">
+      <input type="hidden" name="office_current" value="{{ office }}">
+      <label>MOVER SELECIONADOS PARA:
+        <select name="office_target" id="top-move-select">
+          <option value="">Selecione</option>
           {% for o in offices %}
-            {% if o != office %}
-              <option value="{{ o }}">{{ o }}</option>
+            {% if o.key != office %}
+            <option value="{{ o.key }}">{{ o.display }}</option>
             {% endif %}
           {% endfor %}
         </select>
-        <button class="btn-small">Mover</button>
-      </form>
+      </label>
+      <button class="btn-small" type="submit">MOVER</button>
+    </form>
 
-    </td>
-  </tr>
-  {% endfor %}
+    <form id="deleteSelectedForm" method="post" action="{{ url_for('delete_selected') }}">
+      <input type="hidden" name="office" value="{{ office }}">
+      <button class="btn-small danger" type="submit">EXCLUIR SELECIONADOS</button>
+    </form>
+
+    <a class="btn-small" href="{{ url_for('export_csv', office=office) }}">EXPORTAR CSV</a>
+    <a class="btn-small" href="{{ url_for('export_pdf', office=office) }}">EXPORTAR PDF</a>
+  </div>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th><input id="select-all" type="checkbox"></th>
+      <th>ID</th>
+      <th>NOME</th>
+      <th>CPF</th>
+      <th>ESCRITÓRIO</th>
+      <th>TIPO AÇÃO</th>
+      <th>FECHAMENTO</th>
+      <th>PENDÊNCIAS</th>
+      <th>PROCESSO</th>
+      <th>PROTOCOLO</th>
+      <th>OBS</th>
+      <th>CAPTADOR</th>
+      <th>CRIADO EM</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in rows %}
+    <tr>
+      <td><input class="row-select" type="checkbox" value="{{ r[0] }}"></td>
+      <td>{{ r[0] }}</td>
+      <td>{{ r[1] }}</td>
+      <td>{{ r[2] }}</td>
+      <td>{{ r[3] if r[3] else (r[4].replace('office_','').replace('_',' ')|upper) }}</td>
+      <td>{{ r[5] }}</td>
+      <td>{{ r[6] }}</td>
+      <td>{{ r[7] }}</td>
+      <td>{{ r[8] }}</td>
+      <td>{{ r[9] }}</td>
+      <td>{{ r[10] }}</td>
+      <td>{{ r[11] }}</td>
+      <td>{{ r[12] }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
 </table>
 
-
-<!-- Excluir selecionados -->
-<form method="post" action="{{ url_for('delete_selected') }}" id="deleteSelectedForm">
+<form id="pagination-form" method="get" action="{{ url_for('table') }}">
   <input type="hidden" name="office" value="{{ office }}">
-  <button class="btn-small danger">Excluir selecionados</button>
-</form>
-
-<!-- Paginação -->
-<div class="pagination">
+  <input type="hidden" name="per_page" value="{{ per_page }}">
   {% if page > 1 %}
-    <a href="{{ url_for('table', office=office, page=page-1, per_page=per_page) }}">« Anterior</a>
+    <a class="btn" href="{{ url_for('table', office=office, page=page-1, per_page=per_page, filtro=filtro, valor=valor, data_tipo=data_tipo, data_de=data_de, data_ate=data_ate) }}">« ANTERIOR</a>
   {% endif %}
-
-  Página {{ page }} de {{ total_pages }}
-
+  <span>PÁGINA {{ page }} / {{ total_pages }}</span>
   {% if page < total_pages %}
-    <a href="{{ url_for('table', office=office, page=page+1, per_page=per_page) }}">Próxima »</a>
+    <a class="btn" href="{{ url_for('table', office=office, page=page+1, per_page=per_page, filtro=filtro, valor=valor, data_tipo=data_tipo, data_de=data_de, data_ate=data_ate) }}">PRÓXIMO »</a>
   {% endif %}
-</div>
+</form>
 
 {% endblock %}

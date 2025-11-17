@@ -93,7 +93,23 @@
       <td>{{ r[0] }}</td>
       <td>{{ r[1] }}</td>
       <td>{{ r[2] }}</td>
-      <td>{{ r[3] if r[3] else (r[4].replace('office_','').replace('_',' ')|upper) }}</td>
+
+      {% if office == 'ALL' %}
+        <td>{{ r[3] if r[3] else (r[4].replace('office_','').replace('_',' ')|upper) }}</td>
+      {% else %}
+        <td>
+          <!-- inline select to migrate, shows current display; user change -> confirm -> migrate -->
+          <select name="office_target" class="inline-migrate-select">
+            <option value="">{{ r[3] if r[3] else (r[4].replace('office_','').replace('_',' ')|upper) }}</option>
+            {% for o in offices %}
+              {% if o.key != office %}
+                <option value="{{ o.key }}">{{ o.display }}</option>
+              {% endif %}
+            {% endfor %}
+          </select>
+        </td>
+      {% endif %}
+
       <td>{{ r[5] }}</td>
       <td>{{ r[6] }}</td>
       <td>{{ r[7] }}</td>

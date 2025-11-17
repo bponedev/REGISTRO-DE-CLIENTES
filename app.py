@@ -9,16 +9,12 @@ from datetime import datetime
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 
-# Config
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "database.db")
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 app.secret_key = "troque_para_uma_chave_secreta"
 
-# -------------------------
-# DB helpers
-# -------------------------
 def get_conn():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = None
@@ -27,7 +23,6 @@ def get_conn():
 def init_db():
     conn = get_conn()
     c = conn.cursor()
-    # excluidos table, with escritorio_nome and escritorio_chave
     c.execute("""
         CREATE TABLE IF NOT EXISTS excluidos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -46,7 +41,6 @@ def init_db():
             data_exclusao TEXT
         )
     """)
-    # offices_meta to store mapping office_key <-> display name
     c.execute("""
         CREATE TABLE IF NOT EXISTS offices_meta (
             office_key TEXT PRIMARY KEY,
@@ -57,10 +51,6 @@ def init_db():
     conn.close()
 
 def normalize_office_raw(name: str) -> str:
-    """
-    Option 2 base: replace spaces with underscores; remove invalid chars;
-    then convert to uppercase for consistency of office_key.
-    """
     if not name:
         return ""
     s = name.strip()
@@ -69,16 +59,11 @@ def normalize_office_raw(name: str) -> str:
     return s_clean.upper()
 
 def create_office_table(office_key: str):
-    """
-    Ensure table exists and has required schema (add columns if missing).
-    office_key is already normalized (UPPER, underscores).
-    """
     if not office_key:
         office_key = "CENTRAL"
     table = f"office_{office_key}"
     conn = get_conn()
     c = conn.cursor()
-    # Create table if not exists with basic columns
     c.execute(f"""
         CREATE TABLE IF NOT EXISTS {table} (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -101,10 +86,6 @@ def create_office_table(office_key: str):
     return table
 
 def ensure_table_columns(table_name: str):
-    """
-    Ensure an existing table has our schema columns (backwards compatibility).
-    Adds columns if needed.
-    """
     conn = get_conn()
     c = conn.cursor()
     try:
@@ -126,19 +107,14 @@ def ensure_table_columns(table_name: str):
         conn.close()
 
 def list_offices_meta():
-    """
-    Return list of dicts: [{'key': 'CENTRAL', 'display': 'CENTRAL'}, ...]
-    Ensures that 'CENTRAL' exists.
-    """
     conn = get_conn()
     c = conn.cursor()
-    c.execute("SELECT office_key, display_name FROM offices_meta ORDER BY office_key")
+    c.execute("SELECT office_key, display_name FROM offices_meta ORDER BY display_name")
     rows = c.fetchall()
     conn.close()
     out = []
     for r in rows:
         out.append({"key": r[0], "display": r[1]})
-    # ensure CENTRAL exists
     if not any(o["key"] == "CENTRAL" for o in out):
         out.insert(0, {"key": "CENTRAL", "display": "CENTRAL"})
     return out
@@ -169,21 +145,15 @@ def get_office_display(office_key: str):
     conn.close()
     if row:
         return row[0]
-    # fallback: format key
     return office_key.replace("_", " ").upper()
 
-# initialize DB
 init_db()
 
-# -------------------------
-# Routes
-# -------------------------
 @app.route("/")
 def index():
     offices = list_offices_meta()
     return render_template("index.html", offices=offices)
 
-# create office via manage page (POST)
 @app.route("/create_office", methods=["POST"])
 def create_office():
     name = request.form.get("office_new", "").strip()
@@ -192,13 +162,11 @@ def create_office():
         return redirect(url_for("offices_page"))
     key = normalize_office_raw(name)
     display = name.strip().upper()
-    # register meta and table
     register_office_meta(key, display)
     create_office_table(key)
     flash(f"Escritório '{display}' criado.", "success")
     return redirect(url_for("offices_page"))
 
-# Submit new client
 @app.route("/submit", methods=["POST"])
 def submit():
     data = request.form
@@ -207,12 +175,9 @@ def submit():
     escritorio_raw = data.get("escritorio", "CENTRAL").strip()
     office_key = normalize_office_raw(escritorio_raw) or "CENTRAL"
     display_name = escritorio_raw.strip().upper() if escritorio_raw.strip() else office_key.replace("_", " ").upper()
-
-    # register meta if not exists
     register_office_meta(office_key, display_name)
     table = create_office_table(office_key)
     ensure_table_columns(table)
-
     tipo_acao = data.get("tipo_acao")
     data_fechamento = data.get("data_fechamento")
     pendencias = data.get("pendencias")
@@ -220,7 +185,6 @@ def submit():
     data_protocolo = data.get("data_protocolo")
     observacoes = data.get("observacoes")
     captador = data.get("captador")
-
     conn = get_conn()
     c = conn.cursor()
     c.execute(f"""INSERT INTO {table} 
@@ -233,30 +197,23 @@ def submit():
     flash("Registro salvo com sucesso.", "success")
     return redirect(url_for("table", office=office_key))
 
-# Table listing (office key or ALL)
 @app.route("/table")
 def table():
-    office_param = request.args.get("office", "CENTRAL").strip()
-    office = office_param.upper()
-    # special ALL case
+    office_param = request.args.get("office", "CENTRAL").strip().upper()
     page = int(request.args.get("page", "1") or 1)
     per_page = int(request.args.get("per_page", "10") or 10)
     if per_page not in (10,20,50,100):
         per_page = 10
-
     filtro = request.args.get("filtro")
     valor = request.args.get("valor", "").strip()
     data_tipo = request.args.get("data_tipo")
     data_de = request.args.get("data_de")
     data_ate = request.args.get("data_ate")
-
     offices_meta = list_offices_meta()
-
-    rows = []
-    total = 0
-
     conn = get_conn()
     c = conn.cursor()
+    rows = []
+    total = 0
 
     def match_filters(where_parts, params, table_alias="t"):
         if filtro and valor:
@@ -284,64 +241,37 @@ def table():
                 where_parts.append(f"{table_alias}.{data_tipo} <= ?")
                 params.append(data_ate)
 
-    if office == "ALL":
-        # gather all office tables
+    if office_param == "ALL":
         c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'office_%' ORDER BY name")
         office_tables = [r[0] for r in c.fetchall()]
         all_rows = []
         for t in office_tables:
             try:
                 ensure_table_columns(t)
-                q = f"SELECT *, '{t}' as _table_source FROM {t}"
                 where_parts = []
                 params = []
-                match_filters(where_parts, params)
+                match_filters(where_parts, params, table_alias="t")
+                q = f"SELECT * FROM {t}"
                 if where_parts:
                     q += " WHERE " + " AND ".join(where_parts)
                 q += " ORDER BY id DESC"
                 c.execute(q, tuple(params))
                 fetched = c.fetchall()
-                # annotate with table name
                 for fr in fetched:
-                    # fr is a tuple; append source table name at the end
-                    all_rows.append((t,) + fr)
+                    # produce consistent tuple of length 13 (id..created_at)
+                    vals = list(fr)
+                    while len(vals) < 13:
+                        vals.append(None)
+                    # insert the display name at index 3 if not present
+                    all_rows.append(tuple(vals[:13]))
             except Exception:
                 continue
-        # sort by created (assume created_at at position -2 maybe) or id; we'll sort by created_at if possible
-        # created_at column is at index for each table: after captador, created_at is last column in our schema
-        def sort_key(x):
-            try:
-                # x[1:] corresponds to original row starting id at index 1
-                created = x[-2]  # because we prefixed t -> (t, id, nome, ..., created_at, )
-                return created or ""
-            except:
-                return ""
-        all_rows.sort(key=sort_key, reverse=True)
         total = len(all_rows)
-        # pagination slice
-        start = (page - 1) * per_page
-        end = start + per_page
-        paged = all_rows[start:end]
-        # transform to normalized rows expected by template: we will expose as list of tuples where positions correspond:
-        rows = []
-        for ar in paged:
-            tname = ar[0]
-            row = ar[1:]  # original table row
-            # ensure row has escritorio_nome / escritorio_chave; if not, derive
-            # positions: id(0), nome(1), cpf(2), escritorio_nome(3)?, escritorio_chave(4)? etc. We'll map robustly:
-            # Build a dict by reading PRAGMA for that table and mapping columns to values
-            # For simplicity in template, we'll produce a tuple with fixed indexes:
-            # 0 id,1 nome,2 cpf,3 escritorio_nome,4 escritorio_chave,5 tipo_acao,6 data_fechamento,7 pendencias,8 numero_processo,9 data_protocolo,10 observacoes,11 captador,12 created_at
-            # We'll attempt to align by length
-            vals = list(row)
-            # pad to expected length 12 if needed
-            while len(vals) < 12:
-                vals.append(None)
-            # reorder / extract possible escritorio fields if they are present (best-effort)
-            # If escritorio_nome exists at index 3 (common), keep
-            rows.append(tuple(vals[:12]))
+        all_rows.sort(key=lambda x: x[12] or "", reverse=True)
+        start = (page-1)*per_page
+        rows = all_rows[start:start+per_page]
     else:
-        office_key = normalize_office_raw(office)
+        office_key = normalize_office_raw(office_param)
         table = f"office_{office_key}"
         create_office_table(office_key)
         ensure_table_columns(table)
@@ -351,7 +281,6 @@ def table():
         where_sql = ""
         if where_parts:
             where_sql = "WHERE " + " AND ".join(where_parts)
-        # count
         try:
             count_q = f"SELECT COUNT(*) FROM {table} {where_sql}"
             c.execute(count_q, tuple(params))
@@ -362,10 +291,9 @@ def table():
         if page < 1: page = 1
         if page > total_pages: page = total_pages
         offset = (page - 1) * per_page
-        q = f"SELECT * FROM {table} {where_sql} ORDER BY id DESC LIMIT ? OFFSET ?"
         try:
-            q_params = params + [per_page, offset]
-            c.execute(q, tuple(q_params))
+            q = f"SELECT * FROM {table} {where_sql} ORDER BY id DESC LIMIT ? OFFSET ?"
+            c.execute(q, tuple(params + [per_page, offset]))
             rows = c.fetchall()
         except Exception:
             rows = []
@@ -374,7 +302,7 @@ def table():
     offices = list_offices_meta()
     return render_template("table.html",
                            rows=rows,
-                           office=office,
+                           office=office_param,
                            offices=offices,
                            page=page,
                            per_page=per_page,
@@ -386,19 +314,15 @@ def table():
                            data_de=data_de,
                            data_ate=data_ate)
 
-# Edit client (form)
 @app.route("/edit")
 def edit():
     registro_id = request.args.get("id")
     office_raw = request.args.get("office", "CENTRAL")
-    office_key = normalize_office_raw(office_raw)
-    if not office_key:
-        office_key = "CENTRAL"
+    office_key = normalize_office_raw(office_raw) or "CENTRAL"
     table = f"office_{office_key}"
     ensure_table_columns(table)
     conn = get_conn()
     c = conn.cursor()
-    row = None
     try:
         c.execute(f"SELECT * FROM {table} WHERE id=?", (registro_id,))
         row = c.fetchone()
@@ -408,26 +332,24 @@ def edit():
     if not row:
         flash("Registro não encontrado.", "error")
         return redirect(url_for("table", office=office_key))
-    # Map to dict with keys
     cliente = {
         "id": row[0],
         "nome": row[1],
         "cpf": row[2],
-        "escritorio_nome": row[3] if len(row) > 3 else "",
-        "escritorio_chave": row[4] if len(row) > 4 else f"office_{office_key}",
-        "tipo_acao": row[5] if len(row) > 5 else "",
-        "data_fechamento": row[6] if len(row) > 6 else "",
-        "pendencias": row[7] if len(row) > 7 else "",
-        "numero_processo": row[8] if len(row) > 8 else "",
-        "data_protocolo": row[9] if len(row) > 9 else "",
-        "observacoes": row[10] if len(row) > 10 else "",
-        "captador": row[11] if len(row) > 11 else "",
-        "created_at": row[12] if len(row) > 12 else ""
+        "escritorio_nome": row[3] if len(row)>3 else "",
+        "escritorio_chave": row[4] if len(row)>4 else f"office_{office_key}",
+        "tipo_acao": row[5] if len(row)>5 else "",
+        "data_fechamento": row[6] if len(row)>6 else "",
+        "pendencias": row[7] if len(row)>7 else "",
+        "numero_processo": row[8] if len(row)>8 else "",
+        "data_protocolo": row[9] if len(row)>9 else "",
+        "observacoes": row[10] if len(row)>10 else "",
+        "captador": row[11] if len(row)>11 else "",
+        "created_at": row[12] if len(row)>12 else ""
     }
     offices = list_offices_meta()
     return render_template("edit.html", cliente=cliente, office=office_key, offices=offices)
 
-# Update client (save edits)
 @app.route("/update", methods=["POST"])
 def update():
     registro_id = request.form.get("id")
@@ -435,7 +357,6 @@ def update():
     office_key = normalize_office_raw(office_raw) or "CENTRAL"
     table = f"office_{office_key}"
     ensure_table_columns(table)
-
     nome = request.form.get("nome")
     cpf = request.form.get("cpf")
     escritorio_input = request.form.get("escritorio", "").strip()
@@ -448,20 +369,17 @@ def update():
     data_protocolo = request.form.get("data_protocolo")
     observacoes = request.form.get("observacoes")
     captador = request.form.get("captador")
-
     conn = get_conn()
     c = conn.cursor()
     try:
-        # if changing office (moving)
         if new_office_key != office_key:
             dest_table = create_office_table(new_office_key)
             ensure_table_columns(dest_table)
             register_office_meta(new_office_key, new_display)
-            # copy record from source, update escritorio_nome/chave
             c.execute(f"SELECT * FROM {table} WHERE id=?", (registro_id,))
             old = c.fetchone()
             if old:
-                created_at = old[11] if len(old) > 11 else datetime.utcnow().isoformat()
+                created_at = old[11] if len(old)>11 else datetime.utcnow().isoformat()
                 c.execute(f"""INSERT INTO {dest_table} (nome, cpf, escritorio_nome, escritorio_chave, tipo_acao, data_fechamento, pendencias, numero_processo, data_protocolo, observacoes, captador, created_at)
                               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
                           (nome, cpf, new_display, f"office_{new_office_key}", tipo_acao, data_fechamento, pendencias, numero_processo, data_protocolo, observacoes, captador, created_at))
@@ -483,7 +401,6 @@ def update():
         conn.close()
     return redirect(url_for("table", office=office_key))
 
-# Delete individual (move to excluidos)
 @app.route("/delete", methods=["POST"])
 def delete():
     registro_id = request.form.get("id")
@@ -497,7 +414,6 @@ def delete():
         c.execute(f"SELECT * FROM {table} WHERE id=?", (registro_id,))
         row = c.fetchone()
         if row:
-            # attempt to extract escritorio_nome and escritorio_chave from row; fallback to meta
             escritorio_nome = row[3] if len(row) > 3 and row[3] else get_office_display(office_key)
             escritorio_chave = row[4] if len(row) > 4 and row[4] else f"office_{office_key}"
             c.execute("""INSERT INTO excluidos (nome, cpf, escritorio_nome, escritorio_chave, tipo_acao, data_fechamento, pendencias, numero_processo, data_protocolo, observacoes, captador, created_at, data_exclusao)
@@ -512,7 +428,6 @@ def delete():
         conn.close()
     return redirect(url_for("table", office=office_key))
 
-# Delete selected (batch)
 @app.route("/delete_selected", methods=["POST"])
 def delete_selected():
     ids = request.form.getlist("ids")
@@ -544,7 +459,6 @@ def delete_selected():
         conn.close()
     return redirect(url_for("table", office=office_key))
 
-# Excluídos listing
 @app.route("/excluidos")
 def excluidos():
     conn = get_conn()
@@ -558,7 +472,6 @@ def excluidos():
     offices = list_offices_meta()
     return render_template("excluidos.html", rows=rows, offices=offices)
 
-# Restore individual
 @app.route("/restore", methods=["POST"])
 def restore():
     registro_id = request.form.get("id")
@@ -568,15 +481,12 @@ def restore():
         c.execute("SELECT * FROM excluidos WHERE id=?", (registro_id,))
         row = c.fetchone()
         if row:
-            # row: id, nome, cpf, escritorio_nome, escritorio_chave, ...
             escritorio_chave = row[4] if len(row) > 4 and row[4] else f"office_CENTRAL"
-            # derive key
             if escritorio_chave.startswith("office_"):
                 office_key = escritorio_chave[len("office_"):]
             else:
                 office_key = normalize_office_raw(row[3]) if row[3] else "CENTRAL"
             display_name = row[3] if row[3] else get_office_display(office_key)
-            # ensure dest table
             table = create_office_table(office_key)
             ensure_table_columns(table)
             c.execute(f"""INSERT INTO {table} (nome, cpf, escritorio_nome, escritorio_chave, tipo_acao, data_fechamento, pendencias, numero_processo, data_protocolo, observacoes, captador, created_at)
@@ -591,7 +501,6 @@ def restore():
         conn.close()
     return redirect(url_for("excluidos"))
 
-# Restore selected (batch)
 @app.route("/restore_selected", methods=["POST"])
 def restore_selected():
     ids = request.form.getlist("ids")
@@ -623,7 +532,6 @@ def restore_selected():
         conn.close()
     return redirect(url_for("excluidos"))
 
-# Migration single (called from inline select change via POST)
 @app.route("/migrate", methods=["POST"])
 def migrate():
     registro_id = request.form.get("id")
@@ -634,7 +542,6 @@ def migrate():
     from_key = normalize_office_raw(from_office_raw) or "CENTRAL"
     to_key = normalize_office_raw(target_raw)
     to_display = target_raw.strip().upper() if target_raw.strip() else to_key.replace("_", " ").upper()
-    # ensure dest table and meta
     create_office_table(to_key)
     ensure_table_columns(f"office_{to_key}")
     register_office_meta(to_key, to_display)
@@ -661,7 +568,6 @@ def migrate():
         conn.close()
     return redirect(url_for("table", office=to_key))
 
-# Migrate selected (batch)
 @app.route("/migrate_selected", methods=["POST"])
 def migrate_selected():
     ids = request.form.getlist("ids")
@@ -698,13 +604,11 @@ def migrate_selected():
         conn.close()
     return redirect(url_for("table", office=to_key))
 
-# Offices management
 @app.route("/offices")
 def offices_page():
     offices = list_offices_meta()
     return render_template("offices.html", offices=offices)
 
-# Edit office (rename)
 @app.route("/edit_office/<office>")
 def edit_office(office):
     office_key = normalize_office_raw(office)
@@ -727,22 +631,17 @@ def rename_office():
     conn = get_conn()
     c = conn.cursor()
     try:
-        # check existence
         c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_old,))
         if not c.fetchone():
             flash("Escritório de origem não encontrado.", "error")
             return redirect(url_for("offices_page"))
-        # avoid overwriting existing dest
         c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_new,))
         if c.fetchone():
             flash("Destino já existe. Considere mesclar manualmente.", "error")
             return redirect(url_for("offices_page"))
-        # rename table
         c.execute(f"ALTER TABLE {table_old} RENAME TO {table_new}")
-        # update offices_meta
         new_display = office_new_input.strip().upper()
         c.execute("UPDATE offices_meta SET office_key=?, display_name=? WHERE office_key=?", (office_new, new_display, office_old))
-        # update excluidos references
         c.execute("UPDATE excluidos SET escritorio_chave = ? WHERE escritorio_chave = ?", (table_new, table_old))
         conn.commit()
         flash("Escritório renomeado com sucesso.", "success")
@@ -753,12 +652,11 @@ def rename_office():
         conn.close()
     return redirect(url_for("offices_page"))
 
-# Delete office (with options)
 @app.route("/delete_office", methods=["POST"])
 def delete_office():
     office_key = normalize_office_raw(request.form.get("office_key", ""))
-    action = request.form.get("action")  # 'move' or 'delete'
-    target = request.form.get("target")  # if move, target office key
+    action = request.form.get("action")
+    target = request.form.get("target")
     if not office_key:
         flash("Escritório inválido.", "error")
         return redirect(url_for("offices_page"))
@@ -766,18 +664,14 @@ def delete_office():
     conn = get_conn()
     c = conn.cursor()
     try:
-        # check if table exists
         c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,))
         if not c.fetchone():
-            # still remove meta
             remove_office_meta(office_key)
             flash("Escritório removido.", "success")
             return redirect(url_for("offices_page"))
-        # check if empty
         c.execute(f"SELECT COUNT(*) FROM {table}")
         cnt = c.fetchone()[0]
         if cnt == 0 or action == "delete":
-            # delete table and meta
             c.execute(f"DROP TABLE IF EXISTS {table}")
             remove_office_meta(office_key)
             conn.commit()
@@ -787,7 +681,6 @@ def delete_office():
             target_key = normalize_office_raw(target)
             target_table = create_office_table(target_key)
             ensure_table_columns(target_table)
-            # move all rows
             c.execute(f"INSERT INTO {target_table} (nome, cpf, escritorio_nome, escritorio_chave, tipo_acao, data_fechamento, pendencias, numero_processo, data_protocolo, observacoes, captador, created_at) SELECT nome, cpf, ?, ?, tipo_acao, data_fechamento, pendencias, numero_processo, data_protocolo, observacoes, captador, created_at FROM {table}", (get_office_display(target_key), f"office_{target_key}"))
             c.execute(f"DROP TABLE IF EXISTS {table}")
             remove_office_meta(office_key)
@@ -804,7 +697,6 @@ def delete_office():
         conn.close()
     return redirect(url_for("offices_page"))
 
-# Export CSV / PDF
 @app.route("/export/csv")
 def export_csv():
     office_param = request.args.get("office", "CENTRAL").upper()
@@ -830,7 +722,6 @@ def export_csv():
             rows = c.fetchall()
         except:
             rows = []
-
     conn.close()
     output = io.StringIO()
     writer = csv.writer(output, delimiter=";")

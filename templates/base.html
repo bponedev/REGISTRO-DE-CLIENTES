@@ -3,18 +3,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>{{ title if title else "Sistema de Registro de Clientes" }}</title>
+  <title>{{ title if title else "SISTEMA DE REGISTRO DE CLIENTES" }}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-
 <div class="container">
   <aside class="sidebar">
-    <span class="brand">Sistema de Registro de Clientes</span>
-    <a href="{{ url_for('index') }}">Novo cadastro</a>
-    <a href="{{ url_for('table', office='central') }}">Ver registros</a>
-    <a href="{{ url_for('excluidos') }}">Ver excluídos</a>
-    <a href="{{ url_for('offices_page') }}">Gerenciar escritórios</a>
+    <span class="brand">SISTEMA DE REGISTRO DE CLIENTES</span>
+    <a href="{{ url_for('index') }}">NOVO CADASTRO</a>
+    <a href="{{ url_for('table', office='CENTRAL') }}">VER REGISTROS</a>
+    <a href="{{ url_for('excluidos') }}">VER EXCLUÍDOS</a>
+    <a href="{{ url_for('offices_page') }}">GERENCIAR ESCRITÓRIOS</a>
   </aside>
 
   <main class="main">
@@ -27,10 +26,12 @@
           </div>
         {% endif %}
       {% endwith %}
-
       {% block content %}{% endblock %}
   </main>
 </div>
+
+<!-- toast container -->
+<div id="toast" class="toast" style="display:none;"></div>
 
 <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Editar Cliente</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+<div class="container">
+
+  <aside class="sidebar">
+    <span class="brand">Sistema de Registro de Clientes</span>
+    <a href="{{ url_for('index') }}">Novo cadastro</a>
+    <a href="{{ url_for('table', office=office) }}">Ver registros</a>
+    <a href="{{ url_for('excluidos') }}">Ver excluídos</a>
+  </aside>
+
+  <main class="main">
+    <div class="card">
+
+      <h1>Editar Cliente</h1>
+
+      <form action="/update" method="post">
+
+        <input type="hidden" name="id" value="{{ cliente['id'] }}">
+        <input type="hidden" name="office" value="{{ office }}">
+
+        <label class="field">Nome
+          <input name="nome" value="{{ cliente['nome'] }}" required>
+        </label>
+
+        <label class="field">CPF
+          <input name="cpf" value="{{ cliente['cpf'] }}" required>
+        </label>
+
+        <label class="field">Escritório
+          <input name="escritorio" value="{{ cliente['escritorio'] }}" required>
+        </label>
+
+        <label class="field">Tipo de ação
+          <input name="tipo_acao" value="{{ cliente['tipo_acao'] }}">
+        </label>
+
+        <label class="field">Data do fechamento
+          <input type="date" name="data_fechamento" value="{{ cliente['data_fechamento'] }}">
+        </label>
+
+        <label class="field">Pendências
+          <input name="pendencias" value="{{ cliente['pendencias'] }}">
+        </label>
+
+        <label class="field">Número do processo
+          <input name="numero_processo" value="{{ cliente['numero_processo'] }}">
+        </label>
+
+        <label class="field">Data de protocolo
+          <input type="date" name="data_protocolo" value="{{ cliente['data_protocolo'] }}">
+        </label>
+
+        <label class="field">Observações
+          <textarea name="observacoes">{{ cliente['observacoes'] }}</textarea>
+        </label>
+
+        <label class="field">Captador
+          <select name="captador">
+            <option {% if cliente['captador']=='Pago' %}selected{% endif %}>Pago</option>
+            <option {% if cliente['captador']=='Não pago' %}selected{% endif %}>Não pago</option>
+          </select>
+        </label>
+
+        <button class="btn" type="submit">Salvar alterações</button>
+      </form>
+
+    </div>
+  </main>
+
+</div>
+</body>
+</html>

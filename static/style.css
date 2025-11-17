@@ -1,242 +1,37 @@
-/* ===============================
-   PALETA PRINCIPAL DO SISTEMA
-   =============================== */
-:root {
-  --black: #111;
-  --dark-gray: #1e1e1e;
-  --gray: #2a2a2a;
-  --light-gray: #d9d9d9;
-  --yellow: #f5c400;
-  --yellow-hover: #d9ab00;
-  --white: #fff;
+:root{
+  --black:#111;
+  --dark-gray:#1e1e1e;
+  --gray:#2a2a2a;
+  --light-gray:#d9d9d9;
+  --yellow:#f5c400;
+  --yellow-hover:#d9ab00;
+  --white:#fff;
 }
 
-/* ===============================
-   RESET BÁSICO
-   =============================== */
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-  font-family: Arial, sans-serif;
-}
-
-body {
-  background: var(--dark-gray);
-  color: var(--white);
-}
-
-/* ===============================
-   LAYOUT GERAL
-   =============================== */
-.container {
-  display: flex;
-  min-height: 100vh;
-}
-
-/* ===============================
-   SIDEBAR
-   =============================== */
-.sidebar {
-  width: 260px;
-  background: var(--black);
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-}
-
-.sidebar .brand {
-  font-size: 20px;
-  font-weight: bold;
-  color: var(--yellow);
-  margin-bottom: 20px;
-  display: block;
-}
-
-.sidebar a {
-  color: var(--white);
-  text-decoration: none;
-  padding: 10px 12px;
-  border-radius: 6px;
-  background: var(--gray);
-  transition: 0.2s;
-}
-
-.sidebar a:hover {
-  background: var(--yellow);
-  color: var(--black);
-}
-
-/* ===============================
-   ÁREA PRINCIPAL
-   =============================== */
-.main {
-  flex: 1;
-  padding: 30px;
-}
-
-/* ===============================
-   CARDS
-   =============================== */
-.card {
-  background: var(--gray);
-  padding: 25px;
-  border-radius: 10px;
-  box-shadow: 0 0 10px #0004;
-}
-
-h1 {
-  margin-bottom: 20px;
-}
-
-/* ===============================
-   FORMULÁRIOS
-   =============================== */
-.field {
-  display: block;
-  margin-bottom: 15px;
-}
-
-.field input,
-.field select,
-.field textarea {
-  width: 100%;
-  padding: 10px;
-  border-radius: 6px;
-  margin-top: 5px;
-  border: none;
-  background: var(--light-gray);
-  color: var(--black);
-}
-
-.btn {
-  background: var(--yellow);
-  color: var(--black);
-  padding: 14px 18px;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: bold;
-  transition: 0.2s;
-}
-
-.btn:hover {
-  background: var(--yellow-hover);
-}
-
-/* Botões menores */
-.btn-small {
-  background: var(--yellow);
-  color: var(--black);
-  padding: 6px 10px;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: bold;
-  transition: 0.2s;
-  font-size: 13px;
-}
-
-.btn-small:hover {
-  background: var(--yellow-hover);
-}
-
-.btn-small.danger {
-  background: #d9534f;
-  color: white;
-}
-
-.btn-small.danger:hover {
-  background: #b64642;
-}
-
-.danger {
-  background: #d9534f !important;
-  color: white !important;
-}
-
-.danger:hover {
-  background: #b64642 !important;
-}
-
-/* ===============================
-   TABELAS
-   =============================== */
-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 25px;
-}
-
-table th,
-table td {
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--light-gray);
-}
-
-table th {
-  background: var(--black);
-  color: var(--yellow);
-}
-
-table tr:hover {
-  background: #ffffff0d;
-}
-
-/* ===============================
-   FLASH MESSAGES
-   =============================== */
-.flash-container {
-  margin-bottom: 15px;
-}
-
-.flash {
-  padding: 12px;
-  margin-bottom: 10px;
-  border-radius: 5px;
-}
-
-.flash.success {
-  background: #4caf50;
-  color: white;
-}
-
-.flash.error {
-  background: #d9534f;
-  color: white;
-}
-
-/* ===============================
-   PAGINAÇÃO
-   =============================== */
-.pagination {
-  margin-top: 20px;
-  display: flex;
-  gap: 15px;
-  align-items: center;
-}
-
-.pagination a {
-  color: var(--yellow);
-  font-weight: bold;
-  text-decoration: none;
-}
-
-.pagination a:hover {
-  text-decoration: underline;
-}
-
-/* ===============================
-   FORMS INLINE
-   =============================== */
-.inline-form {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  margin-right: 10px;
-}
-
-.filters {
-  margin-bottom: 20px;
-}
+*{box-sizing:border-box;margin:0;padding:0;font-family:Arial,Helvetica,sans-serif}
+body{background:var(--dark-gray);color:var(--white)}
+.container{display:flex;min-height:100vh}
+.sidebar{width:260px;background:var(--black);padding:20px;display:flex;flex-direction:column;gap:12px}
+.sidebar .brand{color:var(--yellow);font-weight:700;font-size:16px}
+.sidebar a{background:var(--gray);color:var(--white);padding:8px;border-radius:6px;text-decoration:none}
+.sidebar a:hover{background:var(--yellow);color:var(--black)}
+.main{flex:1;padding:24px}
+.card{background:var(--gray);padding:20px;border-radius:10px;box-shadow:0 0 10px #0004;margin-bottom:16px}
+h1{margin-bottom:12px}
+.field{display:block;margin-bottom:12px}
+.field input, .field select, .field textarea{width:100%;padding:10px;border-radius:6px;border:none;background:var(--light-gray);color:var(--black)}
+.btn{background:var(--yellow);color:var(--black);padding:10px 14px;border:none;border-radius:6px;cursor:pointer;font-weight:700}
+.btn:hover{background:var(--yellow-hover)}
+.btn-small{background:var(--yellow);color:var(--black);padding:6px 8px;border:none;border-radius:6px;cursor:pointer;font-weight:700;font-size:13px}
+.btn-small:hover{background:var(--yellow-hover)}
+.btn-small.danger, .danger{background:#d9534f;color:#fff}
+table{width:100%;border-collapse:collapse;margin-top:16px}
+table th, table td{padding:8px;border-bottom:1px solid #ccc}
+table th{background:var(--black);color:var(--yellow);text-align:left}
+.inline-form{display:inline-flex;gap:8px;align-items:center}
+.controls-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.flash{padding:10px;border-radius:6px;margin-bottom:10px}
+.flash.success{background:#4caf50;color:#fff}
+.flash.error{background:#d9534f;color:#fff}
+.toast{position:fixed;right:20px;top:20px;padding:10px 14px;border-radius:6px;background:#333;color:#fff;box-shadow:0 4px 12px #0008;z-index:9999}
+.uppercase{ text-transform:uppercase; }

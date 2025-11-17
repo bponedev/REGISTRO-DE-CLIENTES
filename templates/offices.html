@@ -1,22 +1,50 @@
 {% extends "base.html" %}
 {% block content %}
+<h1>GERENCIAR ESCRITÓRIOS</h1>
 
-<h1>Gerenciar Escritórios</h1>
+<div class="card">
+  <form action="{{ url_for('create_office') }}" method="post" style="display:flex;gap:8px;align-items:center;">
+    <input name="office_new" placeholder="Novo escritório (ex: Campos)" required>
+    <button class="btn" type="submit">CRIAR</button>
+  </form>
 
-<table>
-  <tr>
-    <th>Escritório</th>
-    <th>Ações</th>
-  </tr>
+  <table style="margin-top:12px;">
+    <thead>
+      <tr>
+        <th>ESCRITÓRIO</th>
+        <th>AÇÕES</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for o in offices %}
+      <tr>
+        <td>{{ o.display }}</td>
+        <td>
+          <a class="btn-small" href="{{ url_for('edit_office', office=o.key) }}">RENOMEAR</a>
 
-  {% for o in offices %}
-  <tr>
-    <td>{{ o }}</td>
-    <td>
-      <a class="btn-small" href="{{ url_for('edit_office', office=o) }}">Renomear</a>
-    </td>
-  </tr>
-  {% endfor %}
-</table>
+          <form action="{{ url_for('delete_office') }}" method="post" style="display:inline-block;">
+            <input type="hidden" name="office_key" value="{{ o.key }}">
+            <select name="action">
+              <option value="ask">--OPÇÃO--</option>
+              <option value="move">MOVER REGISTROS E EXCLUIR</option>
+              <option value="delete">EXCLUIR TUDO</option>
+            </select>
+            <select name="target">
+              <option value="">Destino (se mover)</option>
+              {% for t in offices %}
+                {% if t.key != o.key %}
+                  <option value="{{ t.key }}">{{ t.display }}</option>
+                {% endif %}
+              {% endfor %}
+            </select>
+            <button class="btn-small danger" type="submit" onclick="return confirm('Confirma a operação no escritório?')">APLICAR</button>
+          </form>
+
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
 
 {% endblock %}

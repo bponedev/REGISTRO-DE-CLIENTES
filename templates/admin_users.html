@@ -1,60 +1,48 @@
 {% extends "base.html" %}
 {% block content %}
+<h2>Usuários</h2>
 
-<h1>Gerenciar Usuários</h1>
-
-<a class="btn" href="{{ url_for('admin_users_create') }}">Criar novo usuário</a>
-
-<br><br>
-
-<div class="card scrollable">
+<a href="{{ url_for('admin_users_create') }}" class="btn">Novo Usuário</a>
 
 <table class="table">
     <thead>
         <tr>
             <th>ID</th>
+            <th>Nome</th>
             <th>Usuário</th>
-            <th>Nome completo</th>
-            <th>Função</th>
-            <th>Ativo</th>
+            <th>Perfil</th>
             <th>Escritórios</th>
+            <th>Status</th>
             <th>Ações</th>
         </tr>
     </thead>
-
     <tbody>
+
     {% for u in users %}
         <tr>
             <td>{{ u.id }}</td>
+            <td>{{ u.name }}</td>
             <td>{{ u.username }}</td>
-            <td>{{ u.full_name }}</td>
             <td>{{ u.role }}</td>
-            <td>{{ "Sim" if u.active else "Não" }}</td>
+            <td>{{ u.offices }}</td>
+            <td>{{ "Ativo" if u.active else "Inativo" }}</td>
 
             <td>
-                {% for off in u.offices %}
-                    <span class="tag">{{ off }}</span>
+                <a href="{{ url_for('admin_users_edit', user_id=u.id) }}" class="btn small">Editar</a>
+                <a href="{{ url_for('admin_users_offices', user_id=u.id) }}" class="btn small">Escritórios</a>
+                <a href="{{ url_for('admin_users_reset', user_id=u.id) }}" class="btn small">Resetar Senha</a>
+
+                {% if u.active %}
+                    <a href="{{ url_for('admin_users_deactivate', user_id=u.id) }}" class="btn small danger">Desativar</a>
                 {% else %}
-                    <span class="tag tag-gray">Nenhum</span>
-                {% endfor %}
+                    <a href="{{ url_for('admin_users_activate', user_id=u.id) }}" class="btn small">Ativar</a>
+                {% endif %}
+
+                <a href="{{ url_for('admin_users_delete', user_id=u.id) }}" class="btn small danger">Excluir</a>
             </td>
+        </tr>
+    {% endfor %}
 
-            <td>
-
-                <!-- Editar -->
-                <a class="btn-small" href="{{ url_for('admin_users_edit', user_id=u.id) }}">Editar</a>
-
-                <!-- Escritórios -->
-                <a class="btn-small" href="{{ url_for('admin_users_offices', user_id=u.id) }}">Escritórios</a>
-
-                <!-- Reset senha -->
-                <form method="POST" action="{{ url_for('admin_users_reset_password', user_id=u.id) }}" class="inline">
-                    <input type="hidden" name="new_password" value="123456">
-                    <button class="btn-small-warning"
-                        onclick="return confirm('Redefinir senha do usuário {{ u.username }} para 123456?')">
-                        Reset senha
-                    </button>
-                </form>
-
-                <!-- Ativar/Desativar -->
-                <form method="POST" action="{{ url_for('admin_users_edit', user_id=u.id) }}" class="inline">
+    </tbody>
+</table>
+{% endblock %}

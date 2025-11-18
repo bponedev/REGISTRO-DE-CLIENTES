@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h1>Gerenciar Usuários</h1>
+
+<a class="btn" href="{{ url_for('admin_users_create') }}">Criar novo usuário</a>
+
+<br><br>
+
+<div class="card scrollable">
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Usuário</th>
+            <th>Nome completo</th>
+            <th>Função</th>
+            <th>Ativo</th>
+            <th>Escritórios</th>
+            <th>Ações</th>
+        </tr>
+    </thead>
+
+    <tbody>
+    {% for u in users %}
+        <tr>
+            <td>{{ u.id }}</td>
+            <td>{{ u.username }}</td>
+            <td>{{ u.full_name }}</td>
+            <td>{{ u.role }}</td>
+            <td>{{ "Sim" if u.active else "Não" }}</td>
+
+            <td>
+                {% for off in u.offices %}
+                    <span class="tag">{{ off }}</span>
+                {% else %}
+                    <span class="tag tag-gray">Nenhum</span>
+                {% endfor %}
+            </td>
+
+            <td>
+
+                <!-- Editar -->
+                <a class="btn-small" href="{{ url_for('admin_users_edit', user_id=u.id) }}">Editar</a>
+
+                <!-- Escritórios -->
+                <a class="btn-small" href="{{ url_for('admin_users_offices', user_id=u.id) }}">Escritórios</a>
+
+                <!-- Reset senha -->
+                <form method="POST" action="{{ url_for('admin_users_reset_password', user_id=u.id) }}" class="inline">
+                    <input type="hidden" name="new_password" value="123456">
+                    <button class="btn-small-warning"
+                        onclick="return confirm('Redefinir senha do usuário {{ u.username }} para 123456?')">
+                        Reset senha
+                    </button>
+                </form>
+
+                <!-- Ativar/Desativar -->
+                <form method="POST" action="{{ url_for('admin_users_edit', user_id=u.id) }}" class="inline">

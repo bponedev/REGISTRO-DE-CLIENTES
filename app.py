@@ -1,28 +1,72 @@
-# /app.py
-from flask import Flask, render_template, request, redirect, url_for, send_file, flash, jsonify
+# app.py
+from flask import (
+    Flask, render_template, request, redirect, url_for, send_file, flash,
+    session, abort
+)
 import sqlite3
 import os
 import io
 import csv
 import re
 from datetime import datetime
+from functools import wraps
+from werkzeug.security import generate_password_hash, check_password_hash
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 
+# -------------------------
+# Config
+# -------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "database.db")
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
-app.secret_key = "troque_para_uma_chave_secreta"
+app.secret_key = os.environ.get("FLASK_SECRET", "troque_para_uma_chave_secreta")  # troque em produção
 
+# -------------------------
+# DB helpers
+# -------------------------
 def get_conn():
     conn = sqlite3.connect(DB_PATH)
+    # return rows as tuples (older templates expect numeric indexes)
     conn.row_factory = None
     return conn
 
 def init_db():
     conn = get_conn()
     c = conn.cursor()
+
+    # users table
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE,
+            full_name TEXT,
+            password_hash TEXT,
+            role TEXT,
+            active INTEGER DEFAULT 1,
+            created_at TEXT
+        )
+    """)
+
+    # user_offices: many-to-many mapping
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS user_offices (
+            user_id INTEGER,
+            office_key TEXT,
+            PRIMARY KEY (user_id, office_key)
+        )
+    """)
+
+    # offices metadata
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS offices_meta (
+            office_key TEXT PRIMARY KEY,
+            display_name TEXT
+        )
+    """)
+
+    # excluidos (deleted)
     c.execute("""
         CREATE TABLE IF NOT EXISTS excluidos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -41,22 +85,74 @@ def init_db():
             data_exclusao TEXT
         )
     """)
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS offices_meta (
-            office_key TEXT PRIMARY KEY,
-            display_name TEXT
-        )
-    """)
+
     conn.commit()
     conn.close()
 
+    # create default admin if none exists
+    ensure_default_admin()
+
+def ensure_default_admin():
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM users")
+    count = c.fetchone()[0]
+    if count == 0:
+        # create default admin: username=admin password=admin
+        pw_hash = generate_password_hash("admin")
+        now = datetime.utcnow().isoformat()
+        c.execute("INSERT INTO users (username, full_name, password_hash, role, active, created_at) VALUES (?,?,?,?,?,?)",
+                  ("admin", "Administrador Padrão", pw_hash, "ADMIN", 1, now))
+        # ensure central office exists
+        register_office_meta("CENTRAL", "CENTRAL")
+        # give admin access to all offices by design — we will allow ADMIN to bypass checks
+        conn.commit()
+    conn.close()
+
+# -------------------------
+# Office helpers (same structure used before)
+# -------------------------
 def normalize_office_raw(name: str) -> str:
     if not name:
         return ""
     s = name.strip()
     s = s.replace(" ", "_")
-    s_clean = re.sub(r'[^A-Za-z0-9_]', '', s)
-    return s_clean.upper()
+    s = re.sub(r'[^A-Za-z0-9_]', '', s)
+    return s.upper()
+
+def register_office_meta(office_key: str, display_name: str):
+    conn = get_conn()
+    c = conn.cursor()
+    try:
+        c.execute("INSERT OR IGNORE INTO offices_meta (office_key, display_name) VALUES (?,?)", (office_key, display_name))
+        conn.commit()
+    finally:
+        conn.close()
+
+def list_offices_meta():
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT office_key, display_name FROM offices_meta ORDER BY display_name")
+    rows = c.fetchall()
+    conn.close()
+    out = []
+    for r in rows:
+        out.append({"key": r[0], "display": r[1]})
+    # ensure CENTRAL exists
+    if not any(o["key"] == "CENTRAL" for o in out):
+        out.insert(0, {"key": "CENTRAL", "display": "CENTRAL"})
+        register_office_meta("CENTRAL", "CENTRAL")
+    return out
+
+def get_office_display(office_key: str):
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT display_name FROM offices_meta WHERE office_key=?", (office_key,))
+    row = c.fetchone()
+    conn.close()
+    if row:
+        return row[0]
+    return office_key.replace("_", " ").upper()
 
 def create_office_table(office_key: str):
     if not office_key:
@@ -106,75 +202,337 @@ def ensure_table_columns(table_name: str):
     finally:
         conn.close()
 
-def list_offices_meta():
+# -------------------------
+# User helpers (auth & perms)
+# -------------------------
+def get_user_by_id(user_id):
     conn = get_conn()
     c = conn.cursor()
-    c.execute("SELECT office_key, display_name FROM offices_meta ORDER BY display_name")
-    rows = c.fetchall()
-    conn.close()
-    out = []
-    for r in rows:
-        out.append({"key": r[0], "display": r[1]})
-    if not any(o["key"] == "CENTRAL" for o in out):
-        out.insert(0, {"key": "CENTRAL", "display": "CENTRAL"})
-    return out
-
-def register_office_meta(office_key: str, display_name: str):
-    conn = get_conn()
-    c = conn.cursor()
-    try:
-        c.execute("INSERT OR IGNORE INTO offices_meta (office_key, display_name) VALUES (?,?)", (office_key, display_name))
-        conn.commit()
-    finally:
-        conn.close()
-
-def remove_office_meta(office_key: str):
-    conn = get_conn()
-    c = conn.cursor()
-    try:
-        c.execute("DELETE FROM offices_meta WHERE office_key=?", (office_key,))
-        conn.commit()
-    finally:
-        conn.close()
-
-def get_office_display(office_key: str):
-    conn = get_conn()
-    c = conn.cursor()
-    c.execute("SELECT display_name FROM offices_meta WHERE office_key=?", (office_key,))
+    c.execute("SELECT id, username, full_name, role, active FROM users WHERE id=?", (user_id,))
     row = c.fetchone()
     conn.close()
-    if row:
-        return row[0]
-    return office_key.replace("_", " ").upper()
+    if not row:
+        return None
+    return {"id": row[0], "username": row[1], "full_name": row[2], "role": row[3], "active": row[4]}
 
+def get_user_by_username(username):
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT id, username, full_name, password_hash, role, active FROM users WHERE username=?", (username,))
+    row = c.fetchone()
+    conn.close()
+    if not row:
+        return None
+    return {"id": row[0], "username": row[1], "full_name": row[2], "password_hash": row[3], "role": row[4], "active": row[5]}
+
+def get_user_offices(user_id):
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT office_key FROM user_offices WHERE user_id=?", (user_id,))
+    rows = c.fetchall()
+    conn.close()
+    return [r[0] for r in rows]
+
+def user_has_office(user_id, office_key):
+    if not office_key:
+        return False
+    if not get_user_by_id(user_id):
+        return False
+    # Admin has implicit access to all offices
+    user = get_user_by_id(user_id)
+    if user and user["role"] == "ADMIN":
+        return True
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT 1 FROM user_offices WHERE user_id=? AND office_key=?", (user_id, office_key))
+    r = c.fetchone()
+    conn.close()
+    return bool(r)
+
+# -------------------------
+# Auth decorators
+# -------------------------
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if "user_id" not in session:
+            return redirect(url_for("login", next=request.path))
+        user = get_user_by_id(session["user_id"])
+        if not user or user["active"] != 1:
+            session.pop("user_id", None)
+            flash("Sessão inválida. Faça login novamente.", "error")
+            return redirect(url_for("login"))
+        return f(*args, **kwargs)
+    return decorated
+
+def require_roles(*roles):
+    def wrapper(f):
+        @wraps(f)
+        def decorated(*args, **kwargs):
+            if "user_id" not in session:
+                return redirect(url_for("login"))
+            user = get_user_by_id(session["user_id"])
+            if not user:
+                session.pop("user_id", None)
+                return redirect(url_for("login"))
+            if user["role"] not in roles and user["role"] != "ADMIN":
+                flash("Permissão negada.", "error")
+                return redirect(url_for("index"))
+            return f(*args, **kwargs)
+        return decorated
+    return wrapper
+
+def office_edit_allowed(f):
+    """
+    Decorator to ensure that the current user can edit/mutate data of the target office.
+    - Admin bypass
+    - Supervisor bypass (optionally can be restricted; here Supervisor can edit any)
+    - Operator must be linked to that office.
+    The route must pass 'office' parameter via GET/POST or kwargs.
+    """
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if "user_id" not in session:
+            return redirect(url_for("login"))
+        user = get_user_by_id(session["user_id"])
+        if not user:
+            session.pop("user_id", None)
+            return redirect(url_for("login"))
+        # Admin always allowed
+        if user["role"] == "ADMIN":
+            return f(*args, **kwargs)
+        # Supervisor allowed to edit offices they are assigned to (or all if you prefer)
+        # We'll allow SUPERVISOR to act like OPERATOR but also allow viewing excluidos (checked elsewhere)
+        office_param = request.values.get("office") or request.args.get("office") or kwargs.get("office") or request.form.get("office") or None
+        # If target office not provided, allow (some routes use id only)
+        if not office_param:
+            return f(*args, **kwargs)
+        office_key = normalize_office_raw(office_param)
+        if user["role"] in ("SUPERVISOR",):
+            # Supervisor allowed if assigned
+            if user_has_office(user["id"], office_key):
+                return f(*args, **kwargs)
+            flash("Supervisor não vinculado a este escritório.", "error")
+            return redirect(url_for("index"))
+        if user["role"] == "OPERADOR":
+            if user_has_office(user["id"], office_key):
+                return f(*args, **kwargs)
+            flash("Operador não autorizado para este escritório.", "error")
+            return redirect(url_for("index"))
+        # Visualizador cannot edit
+        flash("Usuário sem permissão de edição.", "error")
+        return redirect(url_for("index"))
+    return decorated
+
+# -------------------------
+# Initialize DB & default admin
+# -------------------------
 init_db()
 
+# -------------------------
+# Auth routes
+# -------------------------
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        u = get_user_by_username(username)
+        if not u or not u["active"]:
+            flash("Usuário inválido ou inativo.", "error")
+            return render_template("login.html")
+        if check_password_hash(u["password_hash"], password):
+            session["user_id"] = u["id"]
+            flash("Login efetuado.", "success")
+            nxt = request.args.get("next") or url_for("index")
+            return redirect(nxt)
+        else:
+            flash("Usuário ou senha incorretos.", "error")
+            return render_template("login.html")
+    return render_template("login.html")
+
+@app.route("/logout")
+def logout():
+    session.pop("user_id", None)
+    flash("Desconectado.", "info")
+    return redirect(url_for("login"))
+
+# helper current_user for templates
+@app.context_processor
+def inject_user():
+    user = None
+    if "user_id" in session:
+        user = get_user_by_id(session["user_id"])
+    return {"current_user": user}
+
+# -------------------------
+# Admin - Users management
+# -------------------------
+@app.route("/admin/users")
+@require_roles("ADMIN")
+def admin_users():
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT id, username, full_name, role, active, created_at FROM users ORDER BY id DESC")
+    rows = c.fetchall()
+    conn.close()
+    # annotate offices
+    users = []
+    for r in rows:
+        uid = r[0]
+        u_offs = get_user_offices(uid)
+        users.append({
+            "id": uid, "username": r[1], "full_name": r[2], "role": r[3], "active": r[4], "created_at": r[5],
+            "offices": u_offs
+        })
+    return render_template("admin_users.html", users=users)
+
+@app.route("/admin/users/create", methods=["GET", "POST"])
+@require_roles("ADMIN")
+def admin_users_create():
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        full_name = request.form.get("full_name", "").strip()
+        password = request.form.get("password", "")
+        role = request.form.get("role", "OPERADOR")
+        offices = request.form.getlist("offices")  # office keys
+        if not username or not password:
+            flash("Username e senha são obrigatórios.", "error")
+            return redirect(url_for("admin_users_create"))
+        pw_hash = generate_password_hash(password)
+        now = datetime.utcnow().isoformat()
+        conn = get_conn()
+        c = conn.cursor()
+        try:
+            c.execute("INSERT INTO users (username, full_name, password_hash, role, active, created_at) VALUES (?,?,?,?,?,?)",
+                      (username, full_name, pw_hash, role, 1, now))
+            uid = c.lastrowid
+            for ok in offices:
+                c.execute("INSERT OR IGNORE INTO user_offices (user_id, office_key) VALUES (?,?)", (uid, ok))
+            conn.commit()
+            flash("Usuário criado.", "success")
+            return redirect(url_for("admin_users"))
+        except Exception as e:
+            conn.rollback()
+            flash("Erro ao criar usuário: " + str(e), "error")
+            return redirect(url_for("admin_users_create"))
+        finally:
+            conn.close()
+    # GET
+    offices = list_offices_meta()
+    return render_template("admin_users_create.html", offices=offices)
+
+@app.route("/admin/users/edit/<int:user_id>", methods=["GET", "POST"])
+@require_roles("ADMIN")
+def admin_users_edit(user_id):
+    conn = get_conn()
+    c = conn.cursor()
+    if request.method == "POST":
+        full_name = request.form.get("full_name", "").strip()
+        role = request.form.get("role", "OPERADOR")
+        active = 1 if request.form.get("active") == "1" else 0
+        try:
+            c.execute("UPDATE users SET full_name=?, role=?, active=? WHERE id=?", (full_name, role, active, user_id))
+            conn.commit()
+            flash("Usuário atualizado.", "success")
+        except Exception as e:
+            conn.rollback()
+            flash("Erro ao atualizar: " + str(e), "error")
+        finally:
+            conn.close()
+        return redirect(url_for("admin_users"))
+    # GET
+    c.execute("SELECT id, username, full_name, role, active FROM users WHERE id=?", (user_id,))
+    row = c.fetchone()
+    conn.close()
+    if not row:
+        flash("Usuário não encontrado.", "error")
+        return redirect(url_for("admin_users"))
+    user = {"id": row[0], "username": row[1], "full_name": row[2], "role": row[3], "active": row[4]}
+    offices = list_offices_meta()
+    user_offs = get_user_offices(user_id)
+    return render_template("admin_users_edit.html", user=user, offices=offices, user_offs=user_offs)
+
+@app.route("/admin/users/offices/<int:user_id>", methods=["GET", "POST"])
+@require_roles("ADMIN")
+def admin_users_offices(user_id):
+    if request.method == "POST":
+        selected = request.form.getlist("offices")  # list of office keys
+        conn = get_conn()
+        c = conn.cursor()
+        try:
+            c.execute("DELETE FROM user_offices WHERE user_id=?", (user_id,))
+            for ok in selected:
+                c.execute("INSERT INTO user_offices (user_id, office_key) VALUES (?,?)", (user_id, ok))
+            conn.commit()
+            flash("Escritórios atribuídos atualizados.", "success")
+        except Exception as e:
+            conn.rollback()
+            flash("Erro ao atualizar escritórios: " + str(e), "error")
+        finally:
+            conn.close()
+        return redirect(url_for("admin_users"))
+    offices = list_offices_meta()
+    user_offs = get_user_offices(user_id)
+    return render_template("admin_users_offices.html", offices=offices, user_offs=user_offs, user_id=user_id)
+
+@app.route("/admin/users/reset_password/<int:user_id>", methods=["POST"])
+@require_roles("ADMIN")
+def admin_users_reset_password(user_id):
+    newpass = request.form.get("new_password", "").strip()
+    if not newpass:
+        flash("Senha nova obrigatória.", "error")
+        return redirect(url_for("admin_users"))
+    pw_hash = generate_password_hash(newpass)
+    conn = get_conn()
+    c = conn.cursor()
+    try:
+        c.execute("UPDATE users SET password_hash=? WHERE id=?", (pw_hash, user_id))
+        conn.commit()
+        flash("Senha redefinida.", "success")
+    except Exception as e:
+        conn.rollback()
+        flash("Erro ao redefinir senha: " + str(e), "error")
+    finally:
+        conn.close()
+    return redirect(url_for("admin_users"))
+
+@app.route("/admin/users/delete/<int:user_id>", methods=["POST"])
+@require_roles("ADMIN")
+def admin_users_delete(user_id):
+    conn = get_conn()
+    c = conn.cursor()
+    try:
+        c.execute("DELETE FROM user_offices WHERE user_id=?", (user_id,))
+        c.execute("DELETE FROM users WHERE id=?", (user_id,))
+        conn.commit()
+        flash("Usuário excluído.", "success")
+    except Exception as e:
+        conn.rollback()
+        flash("Erro ao excluir usuário: " + str(e), "error")
+    finally:
+        conn.close()
+    return redirect(url_for("admin_users"))
+
+# -------------------------
+# Client / Office routes (core functionality)
+# -------------------------
 @app.route("/")
+@login_required
 def index():
     offices = list_offices_meta()
     return render_template("index.html", offices=offices)
 
-@app.route("/create_office", methods=["POST"])
-def create_office():
-    name = request.form.get("office_new", "").strip()
-    if not name:
-        flash("Nome inválido.", "error")
-        return redirect(url_for("offices_page"))
-    key = normalize_office_raw(name)
-    display = name.strip().upper()
-    register_office_meta(key, display)
-    create_office_table(key)
-    flash(f"Escritório '{display}' criado.", "success")
-    return redirect(url_for("offices_page"))
-
 @app.route("/submit", methods=["POST"])
+@login_required
+@office_edit_allowed
 def submit():
     data = request.form
     nome = data.get("nome", "").strip()
     cpf = data.get("cpf", "").strip()
-    escritorio_raw = data.get("escritorio", "CENTRAL").strip()
+    escritorio_raw = data.get("escritorio", "CENTRAL")
     office_key = normalize_office_raw(escritorio_raw) or "CENTRAL"
-    display_name = escritorio_raw.strip().upper() if escritorio_raw.strip() else office_key.replace("_", " ").upper()
+    display_name = data.get("escritorio_display") or escritorio_raw.strip().upper() or office_key.replace("_", " ").upper()
     register_office_meta(office_key, display_name)
     table = create_office_table(office_key)
     ensure_table_columns(table)
@@ -198,6 +556,7 @@ def submit():
     return redirect(url_for("table", office=office_key))
 
 @app.route("/table")
+@login_required
 def table():
     office_param = request.args.get("office", "CENTRAL").strip().upper()
     page = int(request.args.get("page", "1") or 1)
@@ -258,11 +617,9 @@ def table():
                 c.execute(q, tuple(params))
                 fetched = c.fetchall()
                 for fr in fetched:
-                    # produce consistent tuple of length 13 (id..created_at)
                     vals = list(fr)
                     while len(vals) < 13:
                         vals.append(None)
-                    # insert the display name at index 3 if not present
                     all_rows.append(tuple(vals[:13]))
             except Exception:
                 continue
@@ -314,7 +671,9 @@ def table():
                            data_de=data_de,
                            data_ate=data_ate)
 
+# Edit/update routes (kept permissive via office_edit_allowed)
 @app.route("/edit")
+@login_required
 def edit():
     registro_id = request.args.get("id")
     office_raw = request.args.get("office", "CENTRAL")
@@ -333,24 +692,16 @@ def edit():
         flash("Registro não encontrado.", "error")
         return redirect(url_for("table", office=office_key))
     cliente = {
-        "id": row[0],
-        "nome": row[1],
-        "cpf": row[2],
-        "escritorio_nome": row[3] if len(row)>3 else "",
-        "escritorio_chave": row[4] if len(row)>4 else f"office_{office_key}",
-        "tipo_acao": row[5] if len(row)>5 else "",
-        "data_fechamento": row[6] if len(row)>6 else "",
-        "pendencias": row[7] if len(row)>7 else "",
-        "numero_processo": row[8] if len(row)>8 else "",
-        "data_protocolo": row[9] if len(row)>9 else "",
-        "observacoes": row[10] if len(row)>10 else "",
-        "captador": row[11] if len(row)>11 else "",
-        "created_at": row[12] if len(row)>12 else ""
+        "id": row[0], "nome": row[1], "cpf": row[2], "escritorio_nome": row[3], "escritorio_chave": row[4], "tipo_acao": row[5],
+        "data_fechamento": row[6], "pendencias": row[7], "numero_processo": row[8],
+        "data_protocolo": row[9], "observacoes": row[10], "captador": row[11], "created_at": row[12] if len(row)>12 else ""
     }
     offices = list_offices_meta()
     return render_template("edit.html", cliente=cliente, office=office_key, offices=offices)
 
 @app.route("/update", methods=["POST"])
+@login_required
+@office_edit_allowed
 def update():
     registro_id = request.form.get("id")
     office_raw = request.form.get("office", "CENTRAL")
@@ -401,7 +752,10 @@ def update():
         conn.close()
     return redirect(url_for("table", office=office_key))
 
+# Delete and batch delete (move to excluidos)
 @app.route("/delete", methods=["POST"])
+@login_required
+@office_edit_allowed
 def delete():
     registro_id = request.form.get("id")
     office_raw = request.form.get("office", "CENTRAL")
@@ -429,6 +783,8 @@ def delete():
     return redirect(url_for("table", office=office_key))
 
 @app.route("/delete_selected", methods=["POST"])
+@login_required
+@office_edit_allowed
 def delete_selected():
     ids = request.form.getlist("ids")
     office_raw = request.form.get("office", "CENTRAL")
@@ -459,8 +815,15 @@ def delete_selected():
         conn.close()
     return redirect(url_for("table", office=office_key))
 
+# Excluidos listing (access control: SUPERVISOR and ADMIN can view/restore; OPERADOR cannot view excluidos per your rules)
 @app.route("/excluidos")
+@login_required
 def excluidos():
+    user = get_user_by_id(session["user_id"])
+    # Visualizador cannot access excluidos; Operators cannot (as per earlier rules)
+    if user["role"] == "VISUALIZADOR" or user["role"] == "OPERADOR":
+        flash("Você não tem permissão para ver excluídos.", "error")
+        return redirect(url_for("index"))
     conn = get_conn()
     c = conn.cursor()
     try:
@@ -472,7 +835,10 @@ def excluidos():
     offices = list_offices_meta()
     return render_template("excluidos.html", rows=rows, offices=offices)
 
+# Restore routes (as implemented previously; robust)
 @app.route("/restore", methods=["POST"])
+@login_required
+@require_roles("ADMIN", "SUPERVISOR")
 def restore():
     registro_id = request.form.get("id")
     conn = get_conn()
@@ -480,21 +846,43 @@ def restore():
     try:
         c.execute("SELECT * FROM excluidos WHERE id=?", (registro_id,))
         row = c.fetchone()
-        if row:
-            escritorio_chave = row[4] if len(row) > 4 and row[4] else f"office_CENTRAL"
-            if escritorio_chave.startswith("office_"):
-                office_key = escritorio_chave[len("office_"):]
-            else:
-                office_key = normalize_office_raw(row[3]) if row[3] else "CENTRAL"
-            display_name = row[3] if row[3] else get_office_display(office_key)
-            table = create_office_table(office_key)
-            ensure_table_columns(table)
-            c.execute(f"""INSERT INTO {table} (nome, cpf, escritorio_nome, escritorio_chave, tipo_acao, data_fechamento, pendencias, numero_processo, data_protocolo, observacoes, captador, created_at)
-                          VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
-                      (row[1], row[2], display_name, escritorio_chave, row[5], row[6], row[7], row[8], row[9], row[10], row[11], row[12]))
-            c.execute("DELETE FROM excluidos WHERE id=?", (registro_id,))
-            conn.commit()
-            flash("Registro restaurado.", "success")
+        if not row:
+            flash("Registro não encontrado.", "error")
+            return redirect(url_for("excluidos"))
+
+        nome = row[1]
+        cpf = row[2]
+        escritorio_nome = row[3] if row[3] else "CENTRAL"
+        escritorio_chave = row[4] if row[4] else "office_CENTRAL"
+        tipo_acao = row[5]
+        data_fechamento = row[6]
+        pendencias = row[7]
+        numero_processo = row[8]
+        data_protocolo = row[9]
+        observacoes = row[10]
+        captador = row[11]
+        created_at = row[12]
+
+        # derive office_key
+        if escritorio_chave and escritorio_chave.startswith("office_"):
+            office_key = escritorio_chave[len("office_"):].upper()
+        else:
+            office_key = normalize_office_raw(escritorio_nome) or "CENTRAL"
+
+        table = create_office_table(office_key)
+        ensure_table_columns(table)
+
+        c.execute(f"""INSERT INTO {table}
+            (nome, cpf, escritorio_nome, escritorio_chave, tipo_acao, data_fechamento,
+             pendencias, numero_processo, data_protocolo, observacoes, captador, created_at)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+             (nome, cpf, escritorio_nome, f"office_{office_key}", tipo_acao, data_fechamento,
+              pendencias, numero_processo, data_protocolo, observacoes, captador, created_at)
+        )
+
+        c.execute("DELETE FROM excluidos WHERE id=?", (registro_id,))
+        conn.commit()
+        flash("Registro restaurado com sucesso.", "success")
     except Exception as e:
         flash("Erro ao restaurar: " + str(e), "error")
     finally:
@@ -502,6 +890,8 @@ def restore():
     return redirect(url_for("excluidos"))
 
 @app.route("/restore_selected", methods=["POST"])
+@login_required
+@require_roles("ADMIN", "SUPERVISOR")
 def restore_selected():
     ids = request.form.getlist("ids")
     conn = get_conn()
@@ -512,27 +902,80 @@ def restore_selected():
             row = c.fetchone()
             if not row:
                 continue
-            escritorio_chave = row[4] if len(row) > 4 and row[4] else f"office_CENTRAL"
-            if escritorio_chave.startswith("office_"):
-                office_key = escritorio_chave[len("office_"):]
+            nome = row[1]
+            cpf = row[2]
+            escritorio_nome = row[3] if row[3] else "CENTRAL"
+            escritorio_chave = row[4] if row[4] else "office_CENTRAL"
+            tipo_acao = row[5]
+            data_fechamento = row[6]
+            pendencias = row[7]
+            numero_processo = row[8]
+            data_protocolo = row[9]
+            observacoes = row[10]
+            captador = row[11]
+            created_at = row[12]
+            if escritorio_chave and escritorio_chave.startswith("office_"):
+                office_key = escritorio_chave[len("office_"):].upper()
             else:
-                office_key = normalize_office_raw(row[3]) if row[3] else "CENTRAL"
-            display_name = row[3] if row[3] else get_office_display(office_key)
+                office_key = normalize_office_raw(escritorio_nome) or "CENTRAL"
             table = create_office_table(office_key)
             ensure_table_columns(table)
-            c.execute(f"""INSERT INTO {table} (nome, cpf, escritorio_nome, escritorio_chave, tipo_acao, data_fechamento, pendencias, numero_processo, data_protocolo, observacoes, captador, created_at)
-                          VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
-                      (row[1], row[2], display_name, escritorio_chave, row[5], row[6], row[7], row[8], row[9], row[10], row[11], row[12]))
+            c.execute(f"""INSERT INTO {table}
+                (nome, cpf, escritorio_nome, escritorio_chave, tipo_acao, data_fechamento,
+                 pendencias, numero_processo, data_protocolo, observacoes, captador, created_at)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                 (nome, cpf, escritorio_nome, f"office_{office_key}", tipo_acao, data_fechamento,
+                  pendencias, numero_processo, data_protocolo, observacoes, captador, created_at)
+            )
             c.execute("DELETE FROM excluidos WHERE id=?", (registro_id,))
         conn.commit()
-        flash("Registros restaurados.", "success")
+        flash("Registros restaurados com sucesso.", "success")
     except Exception as e:
-        flash("Erro ao restaurar em lote: " + str(e), "error")
+        flash("Erro ao restaurar registros: " + str(e), "error")
     finally:
         conn.close()
     return redirect(url_for("excluidos"))
 
+# Permanent delete from excluidos
+@app.route("/delete_forever", methods=["POST"])
+@login_required
+@require_roles("ADMIN")
+def delete_forever():
+    registro_id = request.form.get("id")
+    conn = get_conn()
+    c = conn.cursor()
+    try:
+        c.execute("DELETE FROM excluidos WHERE id=?", (registro_id,))
+        conn.commit()
+        flash("Registro excluído permanentemente.", "success")
+    except Exception as e:
+        flash("Erro ao excluir permanentemente: " + str(e), "error")
+    finally:
+        conn.close()
+    return redirect(url_for("excluidos"))
+
+@app.route("/delete_forever_selected", methods=["POST"])
+@login_required
+@require_roles("ADMIN")
+def delete_forever_selected():
+    ids = request.form.getlist("ids")
+    conn = get_conn()
+    c = conn.cursor()
+    try:
+        for registro_id in ids:
+            c.execute("DELETE FROM excluidos WHERE id=?", (registro_id,))
+        conn.commit()
+        flash("Registros excluídos permanentemente.", "success")
+    except Exception as e:
+        flash("Erro ao excluir permanentemente em lote: " + str(e), "error")
+    finally:
+        conn.close()
+    return redirect(url_for("excluidos"))
+
+# Migration endpoints (migrate single and batch) - require office permissions
 @app.route("/migrate", methods=["POST"])
+@login_required
+@office_edit_allowed
 def migrate():
     registro_id = request.form.get("id")
     from_office_raw = request.form.get("office_current", "CENTRAL")
@@ -569,6 +1012,8 @@ def migrate():
     return redirect(url_for("table", office=to_key))
 
 @app.route("/migrate_selected", methods=["POST"])
+@login_required
+@office_edit_allowed
 def migrate_selected():
     ids = request.form.getlist("ids")
     from_office_raw = request.form.get("office_current", "CENTRAL")
@@ -604,100 +1049,9 @@ def migrate_selected():
         conn.close()
     return redirect(url_for("table", office=to_key))
 
-@app.route("/offices")
-def offices_page():
-    offices = list_offices_meta()
-    return render_template("offices.html", offices=offices)
-
-@app.route("/edit_office/<office>")
-def edit_office(office):
-    office_key = normalize_office_raw(office)
-    display = get_office_display(office_key)
-    return render_template("edit_office.html", office=office_key, display=display)
-
-@app.route("/rename_office", methods=["POST"])
-def rename_office():
-    office_old = normalize_office_raw(request.form.get("office_old", ""))
-    office_new_input = request.form.get("office_new", "").strip()
-    if not office_old or not office_new_input:
-        flash("Dados insuficientes.", "error")
-        return redirect(url_for("offices_page"))
-    office_new = normalize_office_raw(office_new_input)
-    if not office_new:
-        flash("Nome novo inválido.", "error")
-        return redirect(url_for("edit_office", office=office_old))
-    table_old = f"office_{office_old}"
-    table_new = f"office_{office_new}"
-    conn = get_conn()
-    c = conn.cursor()
-    try:
-        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_old,))
-        if not c.fetchone():
-            flash("Escritório de origem não encontrado.", "error")
-            return redirect(url_for("offices_page"))
-        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_new,))
-        if c.fetchone():
-            flash("Destino já existe. Considere mesclar manualmente.", "error")
-            return redirect(url_for("offices_page"))
-        c.execute(f"ALTER TABLE {table_old} RENAME TO {table_new}")
-        new_display = office_new_input.strip().upper()
-        c.execute("UPDATE offices_meta SET office_key=?, display_name=? WHERE office_key=?", (office_new, new_display, office_old))
-        c.execute("UPDATE excluidos SET escritorio_chave = ? WHERE escritorio_chave = ?", (table_new, table_old))
-        conn.commit()
-        flash("Escritório renomeado com sucesso.", "success")
-    except Exception as e:
-        conn.rollback()
-        flash("Erro ao renomear escritório: " + str(e), "error")
-    finally:
-        conn.close()
-    return redirect(url_for("offices_page"))
-
-@app.route("/delete_office", methods=["POST"])
-def delete_office():
-    office_key = normalize_office_raw(request.form.get("office_key", ""))
-    action = request.form.get("action")
-    target = request.form.get("target")
-    if not office_key:
-        flash("Escritório inválido.", "error")
-        return redirect(url_for("offices_page"))
-    table = f"office_{office_key}"
-    conn = get_conn()
-    c = conn.cursor()
-    try:
-        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,))
-        if not c.fetchone():
-            remove_office_meta(office_key)
-            flash("Escritório removido.", "success")
-            return redirect(url_for("offices_page"))
-        c.execute(f"SELECT COUNT(*) FROM {table}")
-        cnt = c.fetchone()[0]
-        if cnt == 0 or action == "delete":
-            c.execute(f"DROP TABLE IF EXISTS {table}")
-            remove_office_meta(office_key)
-            conn.commit()
-            flash("Escritório excluído.", "success")
-            return redirect(url_for("offices_page"))
-        elif action == "move" and target:
-            target_key = normalize_office_raw(target)
-            target_table = create_office_table(target_key)
-            ensure_table_columns(target_table)
-            c.execute(f"INSERT INTO {target_table} (nome, cpf, escritorio_nome, escritorio_chave, tipo_acao, data_fechamento, pendencias, numero_processo, data_protocolo, observacoes, captador, created_at) SELECT nome, cpf, ?, ?, tipo_acao, data_fechamento, pendencias, numero_processo, data_protocolo, observacoes, captador, created_at FROM {table}", (get_office_display(target_key), f"office_{target_key}"))
-            c.execute(f"DROP TABLE IF EXISTS {table}")
-            remove_office_meta(office_key)
-            conn.commit()
-            flash("Escritório excluído e registros movidos.", "success")
-            return redirect(url_for("offices_page"))
-        else:
-            flash("Escritório contém registros. Escolha mover ou excluir.", "error")
-            return redirect(url_for("offices_page"))
-    except Exception as e:
-        conn.rollback()
-        flash("Erro ao excluir escritório: " + str(e), "error")
-    finally:
-        conn.close()
-    return redirect(url_for("offices_page"))
-
+# Export routes (CSV / PDF) - Admin/Supervisor/Operator/Viz can export, but you can restrict later
 @app.route("/export/csv")
+@login_required
 def export_csv():
     office_param = request.args.get("office", "CENTRAL").upper()
     conn = get_conn()
@@ -732,6 +1086,7 @@ def export_csv():
     return send_file(mem, as_attachment=True, download_name=f"{office_param}_export.csv", mimetype="text/csv")
 
 @app.route("/export/pdf")
+@login_required
 def export_pdf():
     office_param = request.args.get("office", "CENTRAL").upper()
     conn = get_conn()
@@ -775,5 +1130,10 @@ def export_pdf():
     buffer.seek(0)
     return send_file(buffer, as_attachment=True, download_name=f"{office_param}_export.pdf", mimetype="application/pdf")
 
+# -------------------------
+# Run
+# -------------------------
 if __name__ == "__main__":
+    # ensure default admin exists before app runs
+    init_db()
     app.run(host="0.0.0.0", port=5000, debug=True)

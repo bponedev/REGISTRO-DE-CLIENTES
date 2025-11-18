@@ -1,3 +1,4 @@
+<!-- CORREÇÃO: base.html -->
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -8,15 +9,22 @@
 </head>
 <body>
 
-<header class="topbar">
+<header style="background: #333; color: white; padding: 10px 0;">
     <div class="container">
         <strong>SISTEMA</strong> —
-        <a href="{{ url_for('index') }}">Novo Cadastro</a>
-        <a href="{{ url_for('table', office='CENTRAL') }}">Registros</a>
-        <a href="{{ url_for('excluidos') }}">Excluídos</a>
-        <a href="{{ url_for('offices_page') }}">Gerenciar Escritórios</a>
-        <a href="{{ url_for('admin_users') }}">Usuários</a>
-        <a href="{{ url_for('logout') }}">Sair</a>
+        <a href="{{ url_for('index') }}" style="color: white; margin: 0 10px;">Novo Cadastro</a>
+        <a href="{{ url_for('table', office='CENTRAL') }}" style="color: white; margin: 0 10px;">Registros</a>
+        
+        {% if current_user and current_user.role in ['ADMIN', 'SUPERVISOR'] %}
+            <a href="{{ url_for('excluidos') }}" style="color: white; margin: 0 10px;">Excluídos</a>
+            <a href="{{ url_for('offices_page') }}" style="color: white; margin: 0 10px;">Gerenciar Escritórios</a>
+        {% endif %}
+        
+        {% if current_user and current_user.role == 'ADMIN' %}
+            <a href="{{ url_for('admin_users') }}" style="color: white; margin: 0 10px;">Usuários</a>
+        {% endif %}
+        
+        <a href="{{ url_for('logout') }}" style="color: white; margin: 0 10px;">Sair</a>
     </div>
 </header>
 

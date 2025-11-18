@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ title if title else "Sistema" }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+<div class="layout">
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <h2 class="brand">SISTEMA</h2>
+
+        <a href="{{ url_for('index') }}">Novo Cadastro</a>
+        <a href="{{ url_for('table', office='CENTRAL') }}">Registros</a>
+        <a href="{{ url_for('excluidos') }}">Excluídos</a>
+        <a href="{{ url_for('offices') }}">Gerenciar Escritórios</a>
+        <a href="{{ url_for('admin_users') }}">Usuários</a>
+        <a href="{{ url_for('logout') }}">Sair</a>
+    </aside>
+
+    <!-- Conteúdo -->
+    <main class="content">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-container">
+                    {% for category, message in messages %}
+                        <div class="flash flash-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+</div>
+
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+
+</body>
+</html>

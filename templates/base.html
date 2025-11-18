@@ -14,7 +14,7 @@
         <a href="{{ url_for('index') }}">Novo Cadastro</a>
         <a href="{{ url_for('table', office='CENTRAL') }}">Registros</a>
         <a href="{{ url_for('excluidos') }}">Excluídos</a>
-        <a href="{{ url_for('offices') }}">Gerenciar Escritórios</a>
+        <a href="{{ url_for('offices_page') }}">Gerenciar Escritórios</a>
         <a href="{{ url_for('admin_users') }}">Usuários</a>
         <a href="{{ url_for('logout') }}">Sair</a>
     </div>
@@ -29,7 +29,6 @@
         {% endif %}
     {% endwith %}
 
-    <!-- ⚠️ ESTE BLOCO PRECISA EXISTIR -->
     {% block content %}
     {% endblock %}
 </div>

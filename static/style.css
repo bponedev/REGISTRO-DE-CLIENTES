@@ -66,9 +66,15 @@ a {
     font-size: 12px;
 }
 
-/* Superior */
+
+/* -------------------------
+   TOP ACTIONS
+------------------------- */
+
 .top-actions {
     margin-bottom: 15px;
+    display: flex;
+    gap: 10px;
 }
 
 
@@ -193,6 +199,10 @@ textarea {
 ------------------------- */
 
 @media (max-width: 768px) {
+    .top-actions {
+        flex-direction: column;
+    }
+
     .table td, .table th {
         font-size: 12px;
         padding: 6px;

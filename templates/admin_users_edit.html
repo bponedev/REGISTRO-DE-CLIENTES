@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h1>Editar Usuário</h1>
+
+<div class="card">
+
+<form method="POST">
+
+    <label>Usuário (não pode editar)
+        <input value="{{ user.username }}" disabled>
+    </label>
+
+    <label>Nome completo
+        <input name="full_name" value="{{ user.full_name }}" required>
+    </label>
+
+    <label>Função
+        <select name="role">
+            <option value="ADMIN" {% if user.role == "ADMIN" %}selected{% endif %}>ADMIN</option>
+            <option value="SUPERVISOR" {% if user.role == "SUPERVISOR" %}selected{% endif %}>SUPERVISOR</option>
+            <option value="OPERADOR" {% if user.role == "OPERADOR" %}selected{% endif %}>OPERADOR</option>
+            <option value="VISUALIZADOR" {% if user.role == "VISUALIZADOR" %}selected{% endif %}>VISUALIZADOR</option>
+        </select>
+    </label>
+
+    <label>Status
+        <select name="active">
+            <option value="1" {% if user.active == 1 %}selected{% endif %}>Ativo</option>
+            <option value="0" {% if user.active == 0 %}selected{% endif %}>Inativo</option>
+        </select>
+    </label>
+
+    <button class="btn" type="submit">Salvar</button>
+
+</form>
+
+</div>
+
+{% endblock %}

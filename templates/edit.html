@@ -1,28 +1,66 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>EDITAR CLIENTE</h1>
+
+<h1>Editar Registro</h1>
+
 <div class="card">
-  <form action="{{ url_for('update') }}" method="post">
+
+<form method="POST" action="{{ url_for('update') }}">
+
     <input type="hidden" name="id" value="{{ cliente.id }}">
     <input type="hidden" name="office" value="{{ office }}">
-    <label class="field">NOME<input name="nome" value="{{ cliente.nome }}" required></label>
-    <label class="field">CPF<input name="cpf" value="{{ cliente.cpf }}" required></label>
-    <label class="field">ESCRITÓRIO (LIVRE)
-      <input name="escritorio" value="{{ cliente.escritorio_nome }}">
+
+    <label>Nome
+        <input name="nome" value="{{ cliente.nome }}">
     </label>
-    <label class="field">TIPO DE AÇÃO<input name="tipo_acao" value="{{ cliente.tipo_acao }}"></label>
-    <label class="field">DATA DO FECHAMENTO<input type="date" name="data_fechamento" value="{{ cliente.data_fechamento }}"></label>
-    <label class="field">PENDÊNCIAS<input name="pendencias" value="{{ cliente.pendencias }}"></label>
-    <label class="field">NÚMERO DO PROCESSO<input name="numero_processo" value="{{ cliente.numero_processo }}"></label>
-    <label class="field">DATA DE PROTOCOLO<input type="date" name="data_protocolo" value="{{ cliente.data_protocolo }}"></label>
-    <label class="field">OBSERVAÇÕES<textarea name="observacoes">{{ cliente.observacoes }}</textarea></label>
-    <label class="field">CAPTADOR
-      <select name="captador">
-        <option {% if cliente.captador == "Pago" %}selected{% endif %}>Pago</option>
-        <option {% if cliente.captador == "Não pago" %}selected{% endif %}>Não pago</option>
-      </select>
+
+    <label>CPF
+        <input name="cpf" value="{{ cliente.cpf }}">
     </label>
-    <button class="btn" type="submit">SALVAR ALTERAÇÕES</button>
-  </form>
+
+    <label>Escritório
+        <select name="escritorio">
+            {% for o in offices %}
+                <option value="{{ o.display }}" {% if cliente.escritorio_nome == o.display %}selected{% endif %}>{{ o.display }}</option>
+            {% endfor %}
+        </select>
+    </label>
+
+    <label>Tipo de ação
+        <input name="tipo_acao" value="{{ cliente.tipo_acao }}">
+    </label>
+
+    <label>Data fechamento
+        <input type="date" name="data_fechamento" value="{{ cliente.data_fechamento }}">
+    </label>
+
+    <label>Pendências
+        <input name="pendencias" value="{{ cliente.pendencias }}">
+    </label>
+
+    <label>Nº processo
+        <input name="numero_processo" value="{{ cliente.numero_processo }}">
+    </label>
+
+    <label>Data protocolo
+        <input type="date" name="data_protocolo" value="{{ cliente.data_protocolo }}">
+    </label>
+
+    <label>Observações
+        <textarea name="observacoes">{{ cliente.observacoes }}</textarea>
+    </label>
+
+    <label>Captador
+        <select name="captador">
+            <option {% if cliente.captador=='PAGO' %}selected{% endif %}>PAGO</option>
+            <option {% if cliente.captador=='NÃO PAGO' %}selected{% endif %}>NÃO PAGO</option>
+        </select>
+    </label>
+
+    <button class="btn" type="submit">Salvar</button>
+
+</form>
+
 </div>
+
 {% endblock %}

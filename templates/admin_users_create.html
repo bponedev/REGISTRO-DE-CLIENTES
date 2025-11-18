@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h1>Criar Usuário</h1>
+
+<div class="card">
+<form method="POST">
+
+    <label>Usuário (login)
+        <input name="username" required>
+    </label>
+
+    <label>Nome completo
+        <input name="full_name" required>
+    </label>
+
+    <label>Senha
+        <input name="password" type="password" required>
+    </label>
+
+    <label>Função
+        <select name="role">
+            <option value="ADMIN">ADMIN</option>
+            <option value="SUPERVISOR">SUPERVISOR</option>
+            <option value="OPERADOR" selected>OPERADOR</option>
+            <option value="VISUALIZADOR">VISUALIZADOR</option>
+        </select>
+    </label>
+
+    <label>Escritórios atribuídos:</label>
+    <div class="checkbox-group">
+        {% for o in offices %}
+        <label>
+            <input type="checkbox" name="offices" value="{{ o.key }}">
+            {{ o.display }}
+        </label>
+        {% endfor %}
+    </div>
+
+    <button class="btn" type="submit">Criar</button>
+
+</form>
+</div>
+
+{% endblock %}
